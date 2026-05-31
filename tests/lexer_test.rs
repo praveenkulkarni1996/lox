@@ -100,3 +100,34 @@ fn test_only_whitespace() {
     let tokens = lex("   \t\n\r  ");
     assert_eq!(tokens.len(), 0);
 }
+
+#[test]
+fn test_complex_input() {
+    let input = "++// hello
+        _AbC()<=<> =>!!===23.123if\"Hello+;-*,\"+;-*,abd_";
+    let tokens = lex(input);
+
+    assert_eq!(tokens.len(), 22);
+    assert!(matches!(tokens[0], Token::Plus));
+    assert!(matches!(tokens[1], Token::Plus));
+    assert!(matches!(tokens[2], Token::Identifier(ref s) if s == "_AbC"));
+    assert!(matches!(tokens[3], Token::LParens));
+    assert!(matches!(tokens[4], Token::RParens));
+    assert!(matches!(tokens[5], Token::LessEqual));
+    assert!(matches!(tokens[6], Token::Less));
+    assert!(matches!(tokens[7], Token::Greater));
+    assert!(matches!(tokens[8], Token::Equal));
+    assert!(matches!(tokens[9], Token::Greater));
+    assert!(matches!(tokens[10], Token::Bang));
+    assert!(matches!(tokens[11], Token::BangEqual));
+    assert!(matches!(tokens[12], Token::EqualEqual));
+    assert!(matches!(tokens[13], Token::Number(23.123)));
+    assert!(matches!(tokens[14], Token::If));
+    assert!(matches!(tokens[15], Token::String(ref s) if s == "Hello+;-*,"));
+    assert!(matches!(tokens[16], Token::Plus));
+    assert!(matches!(tokens[17], Token::Semicolon));
+    assert!(matches!(tokens[18], Token::Minus));
+    assert!(matches!(tokens[19], Token::Star));
+    assert!(matches!(tokens[20], Token::Comma));
+    assert!(matches!(tokens[21], Token::Identifier(ref s) if s == "abd_"));
+}
