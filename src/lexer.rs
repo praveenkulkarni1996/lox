@@ -28,7 +28,6 @@ use derive_more; // 2.1.1
 /// `true` keyword). `Error` represents a lexically invalid character or sequence.
 #[derive(Debug, derive_more::Display)]
 pub enum Token {
-    NoOp,
     Error,
 
     /// A string literal, e.g., `"hello"`.
