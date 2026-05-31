@@ -1,0 +1,8 @@
+[package]
+name = "lox_interpreter"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+lox_lexer = { path = "../lox_lexer", version = "0.2" }
+lox_parser = { path = "../lox_parser", version = "0.2" }

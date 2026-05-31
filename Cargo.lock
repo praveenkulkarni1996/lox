@@ -35,6 +35,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "lox_interpreter"
+version = "0.2.0"
+dependencies = [
+ "lox_lexer",
+ "lox_parser",
+]
+
+[[package]]
 name = "lox_lexer"
 version = "0.2.0"
 dependencies = [
