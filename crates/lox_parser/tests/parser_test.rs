@@ -1,0 +1,384 @@
+use lox_lexer::Lexer;
+use lox_parser::*;
+
+fn parse(input: &str) -> Option<Ast> {
+    let tokens = Lexer::new(input.chars());
+    let mut parser = Parser::new(tokens);
+    parser.next()
+}
+
+// === Primary Literals ===
+
+#[test]
+fn test_number_literal() {
+    let ast = parse("42").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::Number(n)
+            ))))
+        ))) if n == 42.0
+    ));
+}
+
+#[test]
+fn test_decimal_number() {
+    let ast = parse("1.25").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::Number(n)
+            ))))
+        ))) if (n - 1.25).abs() < f64::EPSILON
+    ));
+}
+
+#[test]
+fn test_string_literal() {
+    let ast = parse("\"hello\"").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::Str(ref s)
+            ))))
+        ))) if s == "hello"
+    ));
+}
+
+#[test]
+fn test_true_literal() {
+    let ast = parse("true").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::True
+            ))))
+        )))
+    ));
+}
+
+#[test]
+fn test_false_literal() {
+    let ast = parse("false").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::False
+            ))))
+        )))
+    ));
+}
+
+#[test]
+fn test_nil_literal() {
+    let ast = parse("nil").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::Nil
+            ))))
+        )))
+    ));
+}
+
+// === Unary Expressions ===
+
+#[test]
+fn test_negation() {
+    let ast = parse("-5").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(_))))
+        )))
+    ));
+}
+
+#[test]
+fn test_not() {
+    let ast = parse("!true").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Not(_))))
+        )))
+    ));
+}
+
+#[test]
+fn test_double_negation() {
+    let ast = parse("--1").unwrap();
+    // --1 should be Negative(Negative(Primary(1)))
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(inner))),
+    )))) = ast
+    {
+        assert!(matches!(*inner, AstUnary::Negative(_)));
+    } else {
+        panic!("unexpected AST shape");
+    }
+}
+
+#[test]
+fn test_not_false() {
+    let ast = parse("!false").unwrap();
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Factor(AstFactor::Unary(AstUnary::Not(inner))),
+    )))) = ast
+    {
+        assert!(matches!(*inner, AstUnary::Primary(AstPrimary::False)));
+    } else {
+        panic!("unexpected AST shape");
+    }
+}
+
+// === Factor (Multiplication and Division) ===
+
+#[test]
+fn test_multiplication() {
+    let ast = parse("2 * 3").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+        )))
+    ));
+}
+
+#[test]
+fn test_division() {
+    let ast = parse("10 / 2").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Div(_, _)))
+        )))
+    ));
+}
+
+#[test]
+fn test_chained_multiplication() {
+    // 2 * 3 * 4 should be left-associative: Mul(Mul(2, 3), 4)
+    let ast = parse("2 * 3 * 4").unwrap();
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Factor(AstFactor::Mul(lhs, _rhs)),
+    )))) = ast
+    {
+        assert!(matches!(*lhs, AstFactor::Mul(_, _)));
+    } else {
+        panic!("unexpected AST shape");
+    }
+}
+
+// === Term (Addition and Subtraction) ===
+
+#[test]
+fn test_addition() {
+    let ast = parse("1 + 2").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Add(_, _))
+        )))
+    ));
+}
+
+#[test]
+fn test_subtraction() {
+    let ast = parse("5 - 3").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Sub(_, _))
+        )))
+    ));
+}
+
+#[test]
+fn test_chained_addition() {
+    // 1 + 2 + 3 should be left-associative: Add(Add(1, 2), 3)
+    let ast = parse("1 + 2 + 3").unwrap();
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Add(lhs, _rhs),
+    )))) = ast
+    {
+        assert!(matches!(*lhs, AstTerm::Add(_, _)));
+    } else {
+        panic!("unexpected AST shape");
+    }
+}
+
+// === Comparison ===
+
+#[test]
+fn test_less_than() {
+    let ast = parse("1 < 2").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Less(_, _)
+        )))
+    ));
+}
+
+#[test]
+fn test_less_equal() {
+    let ast = parse("1 <= 2").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::LessEqual(_, _)
+        )))
+    ));
+}
+
+#[test]
+fn test_greater_than() {
+    let ast = parse("3 > 1").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Greater(_, _)
+        )))
+    ));
+}
+
+#[test]
+fn test_greater_equal() {
+    let ast = parse("3 >= 1").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::GreaterEqual(_, _)
+        )))
+    ));
+}
+
+// === Equality ===
+
+#[test]
+fn test_equal() {
+    let ast = parse("1 == 1").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Equal(_, _)))
+    ));
+}
+
+#[test]
+fn test_not_equal() {
+    let ast = parse("1 != 2").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::NotEqual(_, _)))
+    ));
+}
+
+// === Grouping ===
+
+#[test]
+fn test_grouped_expression() {
+    let ast = parse("(42)").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+                AstPrimary::Group(_)
+            ))))
+        )))
+    ));
+}
+
+#[test]
+fn test_grouped_addition() {
+    // (1 + 2) should parse the addition inside the group
+    let ast = parse("(1 + 2)").unwrap();
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(AstPrimary::Group(expr)))),
+    )))) = ast
+    {
+        assert!(matches!(
+            *expr,
+            AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Add(
+                _,
+                _
+            ))))
+        ));
+    } else {
+        panic!("unexpected AST shape");
+    }
+}
+
+// === Precedence ===
+
+#[test]
+fn test_mul_before_add() {
+    // 1 + 2 * 3 should parse as Add(1, Mul(2, 3))
+    let ast = parse("1 + 2 * 3").unwrap();
+    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
+        AstTerm::Add(lhs, rhs),
+    )))) = ast
+    {
+        // lhs is just 1 (a Factor)
+        assert!(matches!(*lhs, AstTerm::Factor(AstFactor::Unary(_))));
+        // rhs is 2 * 3 (a Mul)
+        assert!(matches!(rhs, AstFactor::Mul(_, _)));
+    } else {
+        panic!("expected Add at top level");
+    }
+}
+
+#[test]
+fn test_grouping_overrides_precedence() {
+    // (1 + 2) * 3 should parse as Mul(Group(Add(1, 2)), 3)
+    let ast = parse("(1 + 2) * 3").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+            AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+        )))
+    ));
+}
+
+#[test]
+fn test_comparison_below_equality() {
+    // 1 < 2 == true parses as Equal(Less(1, 2), true)
+    let ast = parse("1 < 2 == true").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Expression(AstExpression::Eq(AstEquality::Equal(_, _)))
+    ));
+}
+
+// === Error Cases ===
+
+#[test]
+fn test_empty_input() {
+    let result = parse("");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_unclosed_paren() {
+    let result = parse("(1 + 2");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_missing_operand() {
+    let result = parse("1 +");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_invalid_primary() {
+    // An identifier isn't a valid primary in the current grammar
+    let result = parse("foo");
+    assert!(result.is_none());
+}
