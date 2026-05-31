@@ -1,15 +1,44 @@
-/// This is solving the lexing (== scanning) part of Crafting Interpreters.
-/// The implementation is derived from:
-/// * https://craftinginterpreters.com/scanning.html#reserved-words-and-identifiers
+//! Lexical analysis (scanning) for the Lox language.
+//!
+//! This module tokenizes Lox source code into a stream of tokens. It handles all lexical elements
+//! including keywords, identifiers, operators, numbers, strings, and comments.
+//!
+//! The implementation follows the principles from
+//! [Crafting Interpreters](https://craftinginterpreters.com/scanning.html#reserved-words-and-identifiers),
+//! specifically the maximal munch principle for keyword recognition.
+//!
+//! # Examples
+//!
+//! ```
+//! use lox::lexer::{Lexer, Token};
+//!
+//! let tokens: Vec<Token> = Lexer::new("true false 42".chars())
+//!     .filter(|t| !matches!(t, Token::NoOp))
+//!     .collect();
+//! assert!(matches!(tokens[0], Token::True));
+//! assert!(matches!(tokens[1], Token::False));
+//! assert!(matches!(tokens[2], Token::Number(42.0)));
+//! ```
+
 use derive_more; // 2.1.1
+
+/// A token from the Lox source code.
+///
+/// Tokens represent the smallest meaningful units of source code: keywords, identifiers,
+/// literals, operators, and punctuation. Most variants are self-explanatory by name (e.g.,
+/// `LBrace` for `{`, `True` for the `true` keyword). The following carry special meaning:
+/// - `NoOp`: Represents whitespace (not part of the Lox specification)
+/// - `Error`: Represents a lexically invalid character or sequence
 #[derive(Debug, derive_more::Display)]
 pub enum Token {
-    // NoOp is a special enum that I've used, but it is not part of the original specification.
     NoOp,
     Error,
 
+    /// A string literal, e.g., `"hello"`.
     String(String),
+    /// An identifier or variable name, e.g., `foo`, `_x`, `myVar123`.
     Identifier(String),
+    /// A numeric literal, e.g., `42`, `3.14`.
     Number(f64),
 
     // Symbols and Operators
@@ -141,6 +170,28 @@ fn scan_number(start: f64, chars: &mut std::iter::Peekable<impl Iterator<Item = 
     Token::Number(number)
 }
 
+/// A lexical analyzer that transforms a character stream into tokens.
+///
+/// `Lexer` implements the `Iterator` trait, yielding tokens one at a time as they are scanned
+/// from the input. It handles all aspects of tokenization including string and number parsing,
+/// keyword recognition, and operator disambiguation.
+///
+/// # Generic Parameters
+///
+/// * `I` - The underlying character iterator (typically `Chars` or a slice iterator)
+///
+/// # Examples
+///
+/// ```
+/// use lox::lexer::{Lexer, Token};
+///
+/// let source = "var x = 42;";
+/// let mut lexer = Lexer::new(source.chars());
+///
+/// assert!(matches!(lexer.next(), Some(Token::Var)));
+/// assert!(matches!(lexer.next(), Some(Token::NoOp)));  // space
+/// assert!(matches!(lexer.next(), Some(Token::Identifier(ref s)) if s == "x"));
+/// ```
 pub struct Lexer<I>
 where
     I: Iterator<Item = char>,
@@ -152,6 +203,20 @@ impl<I> Lexer<I>
 where
     I: Iterator<Item = char>,
 {
+    /// Creates a new lexer from a character iterator.
+    ///
+    /// # Arguments
+    ///
+    /// * `chars` - An iterator yielding characters from the source code
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use lox::lexer::Lexer;
+    ///
+    /// let lexer = Lexer::new("true".chars());
+    /// // Lexer is ready to be iterated
+    /// ```
     pub fn new(chars: I) -> Self {
         Lexer {
             chars: chars.peekable(),
