@@ -10,15 +10,13 @@
 //! # Examples
 //!
 //! ```
-//! use lox::lexer::{Lexer, Token};
+//! use lox_lexer::{Lexer, Token};
 //!
 //! let tokens: Vec<Token> = Lexer::new("true false 42".chars()).collect();
 //! assert!(matches!(tokens[0], Token::True));
 //! assert!(matches!(tokens[1], Token::False));
 //! assert!(matches!(tokens[2], Token::Number(42.0)));
 //! ```
-
-use derive_more; // 2.1.1
 
 /// A token from the Lox source code.
 ///
@@ -179,7 +177,7 @@ fn scan_number(start: f64, chars: &mut std::iter::Peekable<impl Iterator<Item = 
 /// # Examples
 ///
 /// ```
-/// use lox::lexer::{Lexer, Token};
+/// use lox_lexer::{Lexer, Token};
 ///
 /// let source = "var x = 42;";
 /// let mut lexer = Lexer::new(source.chars());
@@ -208,7 +206,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use lox::lexer::Lexer;
+    /// use lox_lexer::Lexer;
     ///
     /// let lexer = Lexer::new("true".chars());
     /// // Lexer is ready to be iterated

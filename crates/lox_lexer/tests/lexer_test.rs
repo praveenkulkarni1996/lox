@@ -1,4 +1,4 @@
-use lox::lexer::{Lexer, Token};
+use lox_lexer::{Lexer, Token};
 
 fn lex(input: &str) -> Vec<Token> {
     Lexer::new(input.chars()).collect()
