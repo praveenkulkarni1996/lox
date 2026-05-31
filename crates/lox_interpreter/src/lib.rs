@@ -12,12 +12,13 @@ pub enum LoxError {
 
 use lox_parser::{
     self,
-    Ast::Expression,
+    Ast::Statement,
     AstComparison::{Greater, GreaterEqual, Less, LessEqual, Term},
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Eq,
     AstFactor::{Div, Mul, Unary},
     AstPrimary::{False, Nil, Number, Str, True},
+    AstStatement::{Expr, Print},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
 };
@@ -171,8 +172,15 @@ fn eval_expression(ast: lox_parser::AstExpression) -> Result<Value, LoxError> {
     }
 }
 
+fn eval_statement(ast: lox_parser::AstStatement) -> Result<Value, LoxError> {
+    match ast {
+        Expr(expr) => eval_expression(expr),
+        Print(_) => todo!("printing is not implemented yet"),
+    }
+}
+
 pub fn eval(ast: lox_parser::Ast) -> Result<Value, LoxError> {
     match ast {
-        Expression(expr) => eval_expression(expr),
+        Statement(stmt) => eval_statement(stmt),
     }
 }

@@ -44,8 +44,13 @@ pub enum AstExpression {
     Eq(AstEquality),
 }
 
+pub enum AstStatement {
+    Expr(AstExpression),
+    Print(AstExpression),
+}
+
 pub enum Ast {
-    Expression(AstExpression),
+    Statement(AstStatement),
 }
 
 pub struct Parser<I>
@@ -222,6 +227,28 @@ where
     Some(AstExpression::Eq(parse_equality(head, p)?))
 }
 
+fn parse_statement<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstStatement>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    match head {
+        lox_lexer::Token::Print => {
+            let expr = parse_expr(p.tokens.next()?, p)?;
+            match p.tokens.next()? {
+                lox_lexer::Token::Semicolon => Some(AstStatement::Print(expr)),
+                _ => None,
+            }
+        }
+        _ => {
+            let expr = parse_expr(head, p)?;
+            match p.tokens.next()? {
+                lox_lexer::Token::Semicolon => Some(AstStatement::Expr(expr)),
+                _ => None,
+            }
+        }
+    }
+}
+
 impl<I> Iterator for Parser<I>
 where
     I: Iterator<Item = lox_lexer::Token>,
@@ -229,7 +256,7 @@ where
     type Item = Ast;
 
     fn next(&mut self) -> Option<Ast> {
-        let expr = parse_expr(self.tokens.next()?, self)?;
-        Some(Ast::Expression(expr))
+        let statement = parse_statement(self.tokens.next()?, self)?;
+        Some(Ast::Statement(statement))
     }
 }

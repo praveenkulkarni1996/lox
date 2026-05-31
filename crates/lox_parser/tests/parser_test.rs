@@ -11,51 +11,51 @@ fn parse(input: &str) -> Option<Ast> {
 
 #[test]
 fn test_number_literal() {
-    let ast = parse("42").unwrap();
+    let ast = parse("42;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Number(n)
             ))))
-        ))) if n == 42.0
+        )))) if n == 42.0
     ));
 }
 
 #[test]
 fn test_decimal_number() {
-    let ast = parse("1.25").unwrap();
+    let ast = parse("1.25;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Number(n)
             ))))
-        ))) if (n - 1.25).abs() < f64::EPSILON
+        )))) if (n - 1.25).abs() < f64::EPSILON
     ));
 }
 
 #[test]
 fn test_string_literal() {
-    let ast = parse("\"hello\"").unwrap();
+    let ast = parse("\"hello\";").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Str(ref s)
             ))))
-        ))) if s == "hello"
+        )))) if s == "hello"
     ));
 }
 
 #[test]
 fn test_true_literal() {
-    let ast = parse("true").unwrap();
+    let ast = parse("true;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::True
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Primary(AstPrimary::True)
             ))))
         )))
     ));
@@ -63,12 +63,12 @@ fn test_true_literal() {
 
 #[test]
 fn test_false_literal() {
-    let ast = parse("false").unwrap();
+    let ast = parse("false;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::False
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Primary(AstPrimary::False)
             ))))
         )))
     ));
@@ -76,12 +76,12 @@ fn test_false_literal() {
 
 #[test]
 fn test_nil_literal() {
-    let ast = parse("nil").unwrap();
+    let ast = parse("nil;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::Nil
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Primary(AstPrimary::Nil)
             ))))
         )))
     ));
@@ -91,32 +91,36 @@ fn test_nil_literal() {
 
 #[test]
 fn test_negation() {
-    let ast = parse("-5").unwrap();
+    let ast = parse("-5;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(_))))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Negative(_)
+            ))))
         )))
     ));
 }
 
 #[test]
 fn test_not() {
-    let ast = parse("!true").unwrap();
+    let ast = parse("!true;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Not(_))))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Not(_)
+            ))))
         )))
     ));
 }
 
 #[test]
 fn test_double_negation() {
-    let ast = parse("--1").unwrap();
+    let ast = parse("--1;").unwrap();
     // --1 should be Negative(Negative(Primary(1)))
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(inner))),
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(inner)))),
     )))) = ast
     {
         assert!(matches!(*inner, AstUnary::Negative(_)));
@@ -127,9 +131,9 @@ fn test_double_negation() {
 
 #[test]
 fn test_not_false() {
-    let ast = parse("!false").unwrap();
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Factor(AstFactor::Unary(AstUnary::Not(inner))),
+    let ast = parse("!false;").unwrap();
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Not(inner)))),
     )))) = ast
     {
         assert!(matches!(*inner, AstUnary::Primary(AstPrimary::False)));
@@ -142,22 +146,22 @@ fn test_not_false() {
 
 #[test]
 fn test_multiplication() {
-    let ast = parse("2 * 3").unwrap();
+    let ast = parse("2 * 3;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _))))
         )))
     ));
 }
 
 #[test]
 fn test_division() {
-    let ast = parse("10 / 2").unwrap();
+    let ast = parse("10 / 2;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Div(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Div(_, _))))
         )))
     ));
 }
@@ -165,9 +169,9 @@ fn test_division() {
 #[test]
 fn test_chained_multiplication() {
     // 2 * 3 * 4 should be left-associative: Mul(Mul(2, 3), 4)
-    let ast = parse("2 * 3 * 4").unwrap();
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Factor(AstFactor::Mul(lhs, _rhs)),
+    let ast = parse("2 * 3 * 4;").unwrap();
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Factor(AstFactor::Mul(lhs, _rhs))),
     )))) = ast
     {
         assert!(matches!(*lhs, AstFactor::Mul(_, _)));
@@ -180,22 +184,22 @@ fn test_chained_multiplication() {
 
 #[test]
 fn test_addition() {
-    let ast = parse("1 + 2").unwrap();
+    let ast = parse("1 + 2;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Add(_, _))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _)))
         )))
     ));
 }
 
 #[test]
 fn test_subtraction() {
-    let ast = parse("5 - 3").unwrap();
+    let ast = parse("5 - 3;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Sub(_, _))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Sub(_, _)))
         )))
     ));
 }
@@ -203,9 +207,9 @@ fn test_subtraction() {
 #[test]
 fn test_chained_addition() {
     // 1 + 2 + 3 should be left-associative: Add(Add(1, 2), 3)
-    let ast = parse("1 + 2 + 3").unwrap();
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Add(lhs, _rhs),
+    let ast = parse("1 + 2 + 3;").unwrap();
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Add(lhs, _rhs)),
     )))) = ast
     {
         assert!(matches!(*lhs, AstTerm::Add(_, _)));
@@ -218,44 +222,44 @@ fn test_chained_addition() {
 
 #[test]
 fn test_less_than() {
-    let ast = parse("1 < 2").unwrap();
+    let ast = parse("1 < 2;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Less(_, _)
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Less(_, _))
         )))
     ));
 }
 
 #[test]
 fn test_less_equal() {
-    let ast = parse("1 <= 2").unwrap();
+    let ast = parse("1 <= 2;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::LessEqual(_, _)
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::LessEqual(_, _))
         )))
     ));
 }
 
 #[test]
 fn test_greater_than() {
-    let ast = parse("3 > 1").unwrap();
+    let ast = parse("3 > 1;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Greater(_, _)
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Greater(_, _))
         )))
     ));
 }
 
 #[test]
 fn test_greater_equal() {
-    let ast = parse("3 >= 1").unwrap();
+    let ast = parse("3 >= 1;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::GreaterEqual(_, _)
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::GreaterEqual(_, _))
         )))
     ));
 }
@@ -264,19 +268,24 @@ fn test_greater_equal() {
 
 #[test]
 fn test_equal() {
-    let ast = parse("1 == 1").unwrap();
+    let ast = parse("1 == 1;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Equal(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Equal(
+            _,
+            _
+        ))))
     ));
 }
 
 #[test]
 fn test_not_equal() {
-    let ast = parse("1 != 2").unwrap();
+    let ast = parse("1 != 2;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::NotEqual(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::NotEqual(_, _)
+        )))
     ));
 }
 
@@ -284,12 +293,12 @@ fn test_not_equal() {
 
 #[test]
 fn test_grouped_expression() {
-    let ast = parse("(42)").unwrap();
+    let ast = parse("(42);").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::Group(_)
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Primary(AstPrimary::Group(_))
             ))))
         )))
     ));
@@ -298,9 +307,11 @@ fn test_grouped_expression() {
 #[test]
 fn test_grouped_addition() {
     // (1 + 2) should parse the addition inside the group
-    let ast = parse("(1 + 2)").unwrap();
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(AstPrimary::Group(expr)))),
+    let ast = parse("(1 + 2);").unwrap();
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
+            AstPrimary::Group(expr),
+        )))),
     )))) = ast
     {
         assert!(matches!(
@@ -320,9 +331,9 @@ fn test_grouped_addition() {
 #[test]
 fn test_mul_before_add() {
     // 1 + 2 * 3 should parse as Add(1, Mul(2, 3))
-    let ast = parse("1 + 2 * 3").unwrap();
-    if let Ast::Expression(AstExpression::Eq(AstEquality::Comparison(AstComparison::Term(
-        AstTerm::Add(lhs, rhs),
+    let ast = parse("1 + 2 * 3;").unwrap();
+    if let Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Add(lhs, rhs)),
     )))) = ast
     {
         // lhs is just 1 (a Factor)
@@ -337,11 +348,11 @@ fn test_mul_before_add() {
 #[test]
 fn test_grouping_overrides_precedence() {
     // (1 + 2) * 3 should parse as Mul(Group(Add(1, 2)), 3)
-    let ast = parse("(1 + 2) * 3").unwrap();
+    let ast = parse("(1 + 2) * 3;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _))))
         )))
     ));
 }
@@ -349,11 +360,35 @@ fn test_grouping_overrides_precedence() {
 #[test]
 fn test_comparison_below_equality() {
     // 1 < 2 == true parses as Equal(Less(1, 2), true)
-    let ast = parse("1 < 2 == true").unwrap();
+    let ast = parse("1 < 2 == true;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Expression(AstExpression::Eq(AstEquality::Equal(_, _)))
+        Ast::Statement(AstStatement::Expr(AstExpression::Eq(AstEquality::Equal(
+            _,
+            _
+        ))))
     ));
+}
+
+// === Print Statement ===
+
+#[test]
+fn test_print_statement() {
+    let ast = parse("print 42;").unwrap();
+    assert!(matches!(ast, Ast::Statement(AstStatement::Print(_))));
+}
+
+#[test]
+fn test_print_expression() {
+    let ast = parse("print 1 + 2;").unwrap();
+    if let Ast::Statement(AstStatement::Print(AstExpression::Eq(AstEquality::Comparison(
+        AstComparison::Term(AstTerm::Add(_, _)),
+    )))) = ast
+    {
+        // ok
+    } else {
+        panic!("expected Print(Add(...))");
+    }
 }
 
 // === Error Cases ===
@@ -366,19 +401,25 @@ fn test_empty_input() {
 
 #[test]
 fn test_unclosed_paren() {
-    let result = parse("(1 + 2");
+    let result = parse("(1 + 2;");
     assert!(result.is_none());
 }
 
 #[test]
 fn test_missing_operand() {
-    let result = parse("1 +");
+    let result = parse("1 +;");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_missing_semicolon() {
+    let result = parse("42");
     assert!(result.is_none());
 }
 
 #[test]
 fn test_invalid_primary() {
     // An identifier isn't a valid primary in the current grammar
-    let result = parse("foo");
+    let result = parse("foo;");
     assert!(result.is_none());
 }
