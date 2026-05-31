@@ -46,6 +46,7 @@ pub enum Token {
     Return,
     Super,
     This,
+    True,
     Var,
     While,
 }
@@ -65,6 +66,7 @@ fn try_keywordify(id: String) -> Token {
         "return" => Token::Return,
         "super" => Token::Super,
         "this" => Token::This,
+        "true" => Token::True,
         "var" => Token::Var,
         "while" => Token::While,
         _ => Token::Identifier(id),
