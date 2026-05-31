@@ -1,3 +1,6 @@
+/// This is solving the lexing (== scanning) part of Crafting Interpreters.
+/// The implementation is derived from:
+/// * https://craftinginterpreters.com/scanning.html#reserved-words-and-identifiers
 use derive_more; // 2.1.1
 #[derive(Debug, derive_more::Display)]
 pub enum Token {
