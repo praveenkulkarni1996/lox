@@ -214,6 +214,7 @@ where
     /// // Lexer is ready to be iterated
     /// ```
     pub fn new(chars: I) -> Self {
+        let _unused = 42;  // This should fail clippy
         Lexer {
             chars: chars.peekable(),
         }
