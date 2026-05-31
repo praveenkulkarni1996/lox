@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+echo "Running pre-commit checks..."
+
+echo "  Checking formatting..."
+cargo fmt --check
+
+echo "  Running clippy..."
+cargo clippy -- -D warnings
+
+echo "  Running tests..."
+cargo test
+
+echo "  Building documentation..."
+cargo doc --no-deps
+
+echo "✓ All pre-commit checks passed!"
