@@ -12,9 +12,7 @@
 //! ```
 //! use lox::lexer::{Lexer, Token};
 //!
-//! let tokens: Vec<Token> = Lexer::new("true false 42".chars())
-//!     .filter(|t| !matches!(t, Token::NoOp))
-//!     .collect();
+//! let tokens: Vec<Token> = Lexer::new("true false 42".chars()).collect();
 //! assert!(matches!(tokens[0], Token::True));
 //! assert!(matches!(tokens[1], Token::False));
 //! assert!(matches!(tokens[2], Token::Number(42.0)));
@@ -25,10 +23,9 @@ use derive_more; // 2.1.1
 /// A token from the Lox source code.
 ///
 /// Tokens represent the smallest meaningful units of source code: keywords, identifiers,
-/// literals, operators, and punctuation. Most variants are self-explanatory by name (e.g.,
-/// `LBrace` for `{`, `True` for the `true` keyword). The following carry special meaning:
-/// - `NoOp`: Represents whitespace (not part of the Lox specification)
-/// - `Error`: Represents a lexically invalid character or sequence
+/// literals, operators, and punctuation. Whitespace is automatically skipped by the lexer.
+/// Most variants are self-explanatory by name (e.g., `LBrace` for `{`, `True` for the
+/// `true` keyword). `Error` represents a lexically invalid character or sequence.
 #[derive(Debug, derive_more::Display)]
 pub enum Token {
     NoOp,
@@ -189,8 +186,8 @@ fn scan_number(start: f64, chars: &mut std::iter::Peekable<impl Iterator<Item = 
 /// let mut lexer = Lexer::new(source.chars());
 ///
 /// assert!(matches!(lexer.next(), Some(Token::Var)));
-/// assert!(matches!(lexer.next(), Some(Token::NoOp)));  // space
 /// assert!(matches!(lexer.next(), Some(Token::Identifier(ref s)) if s == "x"));
+/// assert!(matches!(lexer.next(), Some(Token::Equal)));
 /// ```
 pub struct Lexer<I>
 where
@@ -233,11 +230,8 @@ where
     fn next(&mut self) -> Option<Token> {
         if let Some(me) = self.chars.next() {
             return match me {
-                // Whitespace
-                ' ' => Some(Token::NoOp),
-                '\n' => Some(Token::NoOp),
-                '\t' => Some(Token::NoOp),
-                '\r' => Some(Token::NoOp),
+                // Whitespace - skip and continue to next token
+                ' ' | '\n' | '\t' | '\r' => self.next(),
                 // String Scanning
                 '\"' => Some(scan_string(String::new(), &mut self.chars)),
                 // Unambiguous Operators
