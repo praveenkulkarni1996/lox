@@ -48,12 +48,6 @@ pub enum Ast {
     Expression(AstExpression),
 }
 
-pub enum Rule {
-    Primary,
-    Unary,
-    Factor,
-}
-
 pub struct Parser<I>
 where
     I: Iterator<Item = lox_lexer::Token>,
