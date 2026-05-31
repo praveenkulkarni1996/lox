@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lox_lexer", "crates/lox", "crates/lox_parser"]
+members = ["crates/lox_lexer", "crates/lox_parser"]
 resolver = "2"
 
 [workspace.package]

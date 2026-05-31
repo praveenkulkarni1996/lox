@@ -1,7 +1,0 @@
-[package]
-name = "lox"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-lox_lexer = { path = "../lox_lexer", version = "0.2" }
