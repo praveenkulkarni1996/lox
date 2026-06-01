@@ -45,8 +45,13 @@ pub enum AstEquality {
     NotEqual(Box<AstEquality>, AstComparison),
 }
 
-pub enum AstExpression {
+pub enum AstAssignment {
+    Assign(AstIdentifier, Box<AstAssignment>),
     Eq(AstEquality),
+}
+
+pub enum AstExpression {
+    Assignment(AstAssignment),
 }
 
 pub enum AstStatement {
@@ -238,11 +243,34 @@ where
     Some(lhs)
 }
 
+/// See https://craftinginterpreters.com/statements-and-state.html#assignment-syntax
+fn parse_assignment<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstAssignment>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let eq = parse_equality(head, p);
+    if let Some(_unused) = p.tokens.next_if_eq(&lox_lexer::Token::Equal) {
+        match eq {
+            Some(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                AstFactor::Unary(AstUnary::Primary(Id(identifier))),
+            )))) => {
+                let value = parse_assignment(p.tokens.next()?, p)?;
+                Some(AstAssignment::Assign(identifier, Box::new(value)))
+            }
+            // ERROR: Invalid assignment target
+            // Convert to an error.
+            _ => None,
+        }
+    } else {
+        Some(AstAssignment::Eq(eq?))
+    }
+}
+
 fn parse_expr<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstExpression>
 where
     I: Iterator<Item = lox_lexer::Token>,
 {
-    Some(AstExpression::Eq(parse_equality(head, p)?))
+    Some(AstExpression::Assignment(parse_assignment(head, p)?))
 }
 
 fn parse_statement<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstStatement>

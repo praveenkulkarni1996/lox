@@ -16,10 +16,11 @@ pub enum LoxError {
 use lox_parser::{
     self,
     Ast::Declare,
+    AstAssignment::{Assign, Eq},
     AstComparison::{Greater, GreaterEqual, Less, LessEqual, Term},
     AstDeclaration::{Statement, VarDeclare},
     AstEquality::{Comparison, Equal, NotEqual},
-    AstExpression::Eq,
+    AstExpression::Assignment,
     AstFactor::{Div, Mul, Unary},
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
     AstStatement::{Expr, Print},
@@ -106,7 +107,7 @@ impl<W: std::io::Write> Interpreter<W> {
 }
 
 fn eval_primary<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstPrimary,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -124,7 +125,7 @@ fn eval_primary<W: std::io::Write>(
 }
 
 fn eval_unary<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstUnary,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -140,7 +141,7 @@ fn eval_unary<W: std::io::Write>(
 }
 
 fn eval_factor<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstFactor,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -159,7 +160,7 @@ fn eval_factor<W: std::io::Write>(
 }
 
 fn eval_term<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstTerm,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -178,7 +179,7 @@ fn eval_term<W: std::io::Write>(
 }
 
 fn eval_comparison<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstComparison,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -207,7 +208,7 @@ fn eval_comparison<W: std::io::Write>(
 }
 
 fn eval_equality<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstEquality,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -225,12 +226,29 @@ fn eval_equality<W: std::io::Write>(
     }
 }
 
+fn eval_assignment<W: std::io::Write>(
+    interpreter: &mut Interpreter<W>,
+    ast: lox_parser::AstAssignment,
+) -> Result<Value, LoxError> {
+    match ast {
+        Assign(identifier, expr) => match interpreter.env.get(&identifier) {
+            Some(_existing) => {
+                let value = eval_assignment(interpreter, *expr)?;
+                interpreter.env.insert(identifier, value.clone());
+                Ok(value)
+            }
+            None => Err(LoxError::VariableNotFound(identifier)),
+        },
+        Eq(eq) => eval_equality(interpreter, eq),
+    }
+}
+
 fn eval_expression<W: std::io::Write>(
-    interpreter: &Interpreter<W>,
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstExpression,
 ) -> Result<Value, LoxError> {
     match ast {
-        Eq(eq) => eval_equality(interpreter, eq),
+        Assignment(assignment) => eval_assignment(interpreter, assignment),
     }
 }
 
