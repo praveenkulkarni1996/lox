@@ -1,4 +1,4 @@
-use lox_interpreter::{LoxError, Value, eval};
+use lox_interpreter::{LoxError, Value, eval, eval_to};
 use lox_lexer::Lexer;
 use lox_parser::Parser;
 
@@ -7,6 +7,15 @@ fn interpret(input: &str) -> Result<Value, LoxError> {
     let mut parser = Parser::new(tokens);
     let ast = parser.next().expect("expected a parsed expression");
     eval(ast)
+}
+
+fn interpret_capturing(input: &str) -> (Result<Value, LoxError>, String) {
+    let tokens = Lexer::new(input.chars());
+    let mut parser = Parser::new(tokens);
+    let ast = parser.next().expect("expected a parsed expression");
+    let mut output = Vec::new();
+    let result = eval_to(ast, &mut output);
+    (result, String::from_utf8(output).unwrap())
 }
 
 // === Primary Literals ===
@@ -285,6 +294,78 @@ fn test_comparison_in_equality() {
     // (1 < 2) == true => true == true => true
     let result = interpret("1 < 2 == true;").unwrap();
     assert_eq!(result, Value::Boolean(true));
+}
+
+// === Print Statement ===
+
+#[test]
+fn test_print_number() {
+    let (result, output) = interpret_capturing("print 42;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "42\n");
+}
+
+#[test]
+fn test_print_decimal() {
+    let (result, output) = interpret_capturing("print 1.5;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "1.5\n");
+}
+
+#[test]
+fn test_print_string() {
+    let (result, output) = interpret_capturing("print \"hello\";");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "hello\n");
+}
+
+#[test]
+fn test_print_true() {
+    let (result, output) = interpret_capturing("print true;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "true\n");
+}
+
+#[test]
+fn test_print_false() {
+    let (result, output) = interpret_capturing("print false;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "false\n");
+}
+
+#[test]
+fn test_print_nil() {
+    let (result, output) = interpret_capturing("print nil;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "nil\n");
+}
+
+#[test]
+fn test_print_expression() {
+    let (result, output) = interpret_capturing("print 1 + 2;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "3\n");
+}
+
+#[test]
+fn test_print_comparison() {
+    let (result, output) = interpret_capturing("print 1 < 2;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "true\n");
+}
+
+#[test]
+fn test_print_type_error_propagates() {
+    let (result, output) = interpret_capturing("print -true;");
+    assert!(result.is_err());
+    assert_eq!(output, "");
+}
+
+#[test]
+fn test_expr_statement_no_output() {
+    let (result, output) = interpret_capturing("42;");
+    assert_eq!(result.unwrap(), Value::Number(42.0));
+    assert_eq!(output, "");
 }
 
 // === Type Errors ===

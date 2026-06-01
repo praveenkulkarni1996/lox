@@ -1,5 +1,9 @@
 use std::iter::Iterator;
 
+use crate::AstPrimary::Id;
+
+type AstIdentifier = String;
+
 pub enum AstPrimary {
     Number(f64),
     Str(String),
@@ -7,6 +11,7 @@ pub enum AstPrimary {
     False,
     Nil,
     Group(Box<AstExpression>),
+    Id(AstIdentifier),
 }
 
 pub enum AstUnary {
@@ -49,8 +54,13 @@ pub enum AstStatement {
     Print(AstExpression),
 }
 
-pub enum Ast {
+pub enum AstDeclaration {
+    VarDeclare(AstIdentifier, AstExpression),
     Statement(AstStatement),
+}
+
+pub enum Ast {
+    Declare(AstDeclaration),
 }
 
 pub struct Parser<I>
@@ -71,6 +81,13 @@ where
     }
 }
 
+fn parse_id(head: lox_lexer::Token) -> Option<AstIdentifier> {
+    match head {
+        lox_lexer::Token::Identifier(var) => Some(var),
+        _ => None,
+    }
+}
+
 fn parse_primary<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstPrimary>
 where
     I: Iterator<Item = lox_lexer::Token>,
@@ -81,6 +98,7 @@ where
         lox_lexer::Token::True => Some(AstPrimary::True),
         lox_lexer::Token::False => Some(AstPrimary::False),
         lox_lexer::Token::Nil => Some(AstPrimary::Nil),
+        lox_lexer::Token::Identifier(_) => Some(Id(parse_id(head)?)),
         lox_lexer::Token::LParens => {
             let expr = parse_expr(p.tokens.next()?, p)?;
             match p.tokens.next()? {
@@ -249,6 +267,31 @@ where
     }
 }
 
+fn parse_declaration<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstDeclaration>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    match head {
+        lox_lexer::Token::Var => {
+            let identifier: AstIdentifier = parse_id(p.tokens.next()?)?;
+            match p.tokens.next()? {
+                lox_lexer::Token::Equal => {}
+                _ => {
+                    return None;
+                }
+            }
+            let initializer = parse_expr(head, p)?;
+            match p.tokens.next()? {
+                lox_lexer::Token::Semicolon => {
+                    Some(AstDeclaration::VarDeclare(identifier, initializer))
+                }
+                _ => None,
+            }
+        }
+        _ => Some(AstDeclaration::Statement(parse_statement(head, p)?)),
+    }
+}
+
 impl<I> Iterator for Parser<I>
 where
     I: Iterator<Item = lox_lexer::Token>,
@@ -256,7 +299,7 @@ where
     type Item = Ast;
 
     fn next(&mut self) -> Option<Ast> {
-        let statement = parse_statement(self.tokens.next()?, self)?;
-        Some(Ast::Statement(statement))
+        let declaration = parse_declaration(self.tokens.next()?, self)?;
+        Some(Ast::Declare(declaration))
     }
 }

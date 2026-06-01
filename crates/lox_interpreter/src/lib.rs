@@ -10,10 +10,13 @@ pub enum LoxError {
     NumberConversionError(Value),
 }
 
+use std::fmt;
+
 use lox_parser::{
     self,
-    Ast::Statement,
+    Ast::Declare,
     AstComparison::{Greater, GreaterEqual, Less, LessEqual, Term},
+    AstDeclaration::{Statement, VarDeclare},
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Eq,
     AstFactor::{Div, Mul, Unary},
@@ -24,7 +27,7 @@ use lox_parser::{
 };
 
 /// A runtime value produced by evaluating a Lox expression.
-#[derive(Debug, derive_more::Display, PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum Value {
     /// A floating-point number.
     Number(f64),
@@ -48,6 +51,21 @@ impl From<Value> for bool {
             Value::Nil => false,
             Value::Boolean(b) => b,
             _ => true,
+        }
+    }
+}
+
+impl std::fmt::Display for Value {
+    /// The textbook is quite opinionated about what constitutes a valid way to
+    /// print values. I am not precisely following the letter of the law.
+    ///
+    /// Reference: <https://craftinginterpreters.com/evaluating-expressions.html#hooking-up-the-interpreter>
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value::Nil => write!(f, "nil"),
+            Value::Number(num) => write!(f, "{}", num),
+            Value::Boolean(b) => write!(f, "{}", b),
+            Value::Str(s) => write!(f, "{}", s),
         }
     }
 }
@@ -77,7 +95,7 @@ fn eval_primary(ast: lox_parser::AstPrimary) -> Result<Value, LoxError> {
         True => Ok(Value::Boolean(true)),
         False => Ok(Value::Boolean(false)),
         Nil => Ok(Value::Nil),
-        _ => todo!("evaluate groups"),
+        _ => todo!("evaluate groups and identifier:walk"),
     }
 }
 
@@ -172,15 +190,36 @@ fn eval_expression(ast: lox_parser::AstExpression) -> Result<Value, LoxError> {
     }
 }
 
-fn eval_statement(ast: lox_parser::AstStatement) -> Result<Value, LoxError> {
+fn eval_statement(
+    ast: lox_parser::AstStatement,
+    out: &mut impl std::io::Write,
+) -> Result<Value, LoxError> {
     match ast {
         Expr(expr) => eval_expression(expr),
-        Print(_) => todo!("printing is not implemented yet"),
+        Print(expr) => {
+            let result = eval_expression(expr)?;
+            writeln!(out, "{}", result).unwrap();
+            Ok(Value::Nil)
+        }
+    }
+}
+
+fn eval_declaration(
+    ast: lox_parser::AstDeclaration,
+    out: &mut impl std::io::Write,
+) -> Result<Value, LoxError> {
+    match ast {
+        VarDeclare(_, _) => todo!("add support for variable declaration"),
+        Statement(stmt) => eval_statement(stmt, out),
     }
 }
 
 pub fn eval(ast: lox_parser::Ast) -> Result<Value, LoxError> {
+    eval_to(ast, &mut std::io::stdout())
+}
+
+pub fn eval_to(ast: lox_parser::Ast, out: &mut impl std::io::Write) -> Result<Value, LoxError> {
     match ast {
-        Statement(stmt) => eval_statement(stmt),
+        Declare(decl) => eval_declaration(decl, out),
     }
 }
