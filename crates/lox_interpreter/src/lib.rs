@@ -87,8 +87,27 @@ impl TryFrom<Value> for f64 {
     }
 }
 
-/// Evaluates a primary expression (literal or grouped expression).
-fn eval_primary(ast: lox_parser::AstPrimary) -> Result<Value, LoxError> {
+pub struct Interpreter<W>
+where
+    W: std::io::Write,
+{
+    pub out: W,
+    pub env: std::collections::HashMap<String, Value>,
+}
+
+impl<W: std::io::Write> Interpreter<W> {
+    pub fn new(out: W) -> Self {
+        Interpreter {
+            out,
+            env: std::collections::HashMap::new(),
+        }
+    }
+}
+
+fn eval_primary<W: std::io::Write>(
+    _interpreter: &Interpreter<W>,
+    ast: lox_parser::AstPrimary,
+) -> Result<Value, LoxError> {
     match ast {
         Number(x) => Ok(Value::Number(x)),
         Str(s) => Ok(Value::Str(s)),
@@ -99,127 +118,146 @@ fn eval_primary(ast: lox_parser::AstPrimary) -> Result<Value, LoxError> {
     }
 }
 
-/// Evaluates a unary expression (`!` or `-` prefix operators).
-fn eval_unary(ast: lox_parser::AstUnary) -> Result<Value, LoxError> {
+fn eval_unary<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstUnary,
+) -> Result<Value, LoxError> {
     match ast {
-        Primary(primary) => Ok(eval_primary(primary)?),
-        Not(unary) => Ok(Value::Boolean(!bool::from(eval_unary(*unary)?))),
-        Negative(unary) => Ok(Value::Number(-(f64::try_from(eval_unary(*unary)?)?))),
+        Primary(primary) => Ok(eval_primary(interpreter, primary)?),
+        Not(unary) => Ok(Value::Boolean(!bool::from(eval_unary(
+            interpreter,
+            *unary,
+        )?))),
+        Negative(unary) => Ok(Value::Number(
+            -(f64::try_from(eval_unary(interpreter, *unary)?)?),
+        )),
     }
 }
 
-/// Evaluates a product or quotient of two numbers.
-fn eval_factor(ast: lox_parser::AstFactor) -> Result<Value, LoxError> {
+fn eval_factor<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstFactor,
+) -> Result<Value, LoxError> {
     match ast {
-        Unary(unary) => Ok(eval_unary(unary)?),
+        Unary(unary) => Ok(eval_unary(interpreter, unary)?),
         Mul(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_factor(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_unary(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_factor(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_unary(interpreter, rhs)?)?;
             Ok(Value::Number(lhs * rhs))
         }
         Div(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_factor(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_unary(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_factor(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_unary(interpreter, rhs)?)?;
             Ok(Value::Number(lhs / rhs))
         }
     }
 }
 
-/// Evaluates the sum or difference.
-fn eval_term(ast: lox_parser::AstTerm) -> Result<Value, LoxError> {
+fn eval_term<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstTerm,
+) -> Result<Value, LoxError> {
     match ast {
-        Factor(factor) => Ok(eval_factor(factor)?),
+        Factor(factor) => Ok(eval_factor(interpreter, factor)?),
         Add(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_term(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_factor(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_term(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_factor(interpreter, rhs)?)?;
             Ok(Value::Number(lhs + rhs))
         }
         Sub(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_term(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_factor(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_term(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_factor(interpreter, rhs)?)?;
             Ok(Value::Number(lhs - rhs))
         }
     }
 }
 
-fn eval_comparison(ast: lox_parser::AstComparison) -> Result<Value, LoxError> {
+fn eval_comparison<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstComparison,
+) -> Result<Value, LoxError> {
     match ast {
-        Term(term) => Ok(eval_term(term)?),
+        Term(term) => Ok(eval_term(interpreter, term)?),
         GreaterEqual(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_comparison(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_term(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_comparison(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_term(interpreter, rhs)?)?;
             Ok(Value::Boolean(lhs >= rhs))
         }
         Greater(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_comparison(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_term(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_comparison(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_term(interpreter, rhs)?)?;
             Ok(Value::Boolean(lhs > rhs))
         }
         LessEqual(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_comparison(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_term(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_comparison(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_term(interpreter, rhs)?)?;
             Ok(Value::Boolean(lhs <= rhs))
         }
         Less(lhs, rhs) => {
-            let lhs: f64 = f64::try_from(eval_comparison(*lhs)?)?;
-            let rhs: f64 = f64::try_from(eval_term(rhs)?)?;
+            let lhs: f64 = f64::try_from(eval_comparison(interpreter, *lhs)?)?;
+            let rhs: f64 = f64::try_from(eval_term(interpreter, rhs)?)?;
             Ok(Value::Boolean(lhs < rhs))
         }
     }
 }
 
-fn eval_equality(ast: lox_parser::AstEquality) -> Result<Value, LoxError> {
+fn eval_equality<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstEquality,
+) -> Result<Value, LoxError> {
     match ast {
-        Comparison(comparison) => Ok(eval_comparison(comparison)?),
+        Comparison(comparison) => Ok(eval_comparison(interpreter, comparison)?),
         Equal(lhs, rhs) => {
-            let lhs: Value = eval_equality(*lhs)?;
-            let rhs: Value = eval_comparison(rhs)?;
+            let lhs: Value = eval_equality(interpreter, *lhs)?;
+            let rhs: Value = eval_comparison(interpreter, rhs)?;
             Ok(Value::Boolean(lhs == rhs))
         }
         NotEqual(lhs, rhs) => {
-            let lhs: Value = eval_equality(*lhs)?;
-            let rhs: Value = eval_comparison(rhs)?;
+            let lhs: Value = eval_equality(interpreter, *lhs)?;
+            let rhs: Value = eval_comparison(interpreter, rhs)?;
             Ok(Value::Boolean(lhs != rhs))
         }
     }
 }
 
-fn eval_expression(ast: lox_parser::AstExpression) -> Result<Value, LoxError> {
+fn eval_expression<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstExpression,
+) -> Result<Value, LoxError> {
     match ast {
-        Eq(eq) => eval_equality(eq),
+        Eq(eq) => eval_equality(interpreter, eq),
     }
 }
 
-fn eval_statement(
+fn eval_statement<W: std::io::Write>(
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstStatement,
-    out: &mut impl std::io::Write,
 ) -> Result<Value, LoxError> {
     match ast {
-        Expr(expr) => eval_expression(expr),
+        Expr(expr) => eval_expression(interpreter, expr),
         Print(expr) => {
-            let result = eval_expression(expr)?;
-            writeln!(out, "{}", result).unwrap();
+            let result = eval_expression(interpreter, expr)?;
+            writeln!(interpreter.out, "{}", result).unwrap();
             Ok(Value::Nil)
         }
     }
 }
 
-fn eval_declaration(
+fn eval_declaration<W: std::io::Write>(
+    interpreter: &mut Interpreter<W>,
     ast: lox_parser::AstDeclaration,
-    out: &mut impl std::io::Write,
 ) -> Result<Value, LoxError> {
     match ast {
         VarDeclare(_, _) => todo!("add support for variable declaration"),
-        Statement(stmt) => eval_statement(stmt, out),
+        Statement(stmt) => eval_statement(interpreter, stmt),
     }
 }
 
-pub fn eval(ast: lox_parser::Ast) -> Result<Value, LoxError> {
-    eval_to(ast, &mut std::io::stdout())
-}
-
-pub fn eval_to(ast: lox_parser::Ast, out: &mut impl std::io::Write) -> Result<Value, LoxError> {
+pub fn eval<W: std::io::Write>(
+    interpreter: &mut Interpreter<W>,
+    ast: lox_parser::Ast,
+) -> Result<Value, LoxError> {
     match ast {
-        Declare(decl) => eval_declaration(decl, out),
+        Declare(decl) => eval_declaration(interpreter, decl),
     }
 }
