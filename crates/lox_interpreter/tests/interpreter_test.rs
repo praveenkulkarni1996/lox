@@ -422,6 +422,46 @@ fn test_undefined_variable_is_error() {
     assert!(result.is_err());
 }
 
+// === Variable Assignment ===
+
+#[test]
+fn test_assignment() {
+    let result = interpret("var x = 1; x = 42; x;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_assignment_returns_value() {
+    // Assignment is an expression; it returns the assigned value.
+    let result = interpret("var x = 1; x = 42;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_assignment_overwrites_previous_value() {
+    let result = interpret("var x = 10; x = 20; x = 30; x;").unwrap();
+    assert_eq!(result, Value::Number(30.0));
+}
+
+#[test]
+fn test_chained_assignment() {
+    // Right-associative: x = (y = 42)
+    let result = interpret("var x = 0; var y = 0; x = y = 42; x;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_chained_assignment_sets_both_vars() {
+    let result = interpret("var x = 0; var y = 0; x = y = 42; y;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_assignment_to_undeclared_is_error() {
+    let result = interpret("x = 42;");
+    assert!(result.is_err());
+}
+
 // === Type Errors ===
 
 #[test]
