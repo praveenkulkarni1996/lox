@@ -280,7 +280,7 @@ where
                     return None;
                 }
             }
-            let initializer = parse_expr(head, p)?;
+            let initializer = parse_expr(p.tokens.next()?, p)?;
             match p.tokens.next()? {
                 lox_lexer::Token::Semicolon => {
                     Some(AstDeclaration::VarDeclare(identifier, initializer))

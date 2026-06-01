@@ -5,9 +5,15 @@ use lox_parser::Parser;
 fn interpret(input: &str) -> Result<Value, LoxError> {
     let tokens = Lexer::new(input.chars());
     let mut parser = Parser::new(tokens);
-    let ast = parser.next().expect("expected a parsed expression");
     let mut interpreter = Interpreter::new(std::io::stdout());
-    eval(&mut interpreter, ast)
+    let mut result = Ok(Value::Nil);
+    for ast in &mut parser {
+        result = eval(&mut interpreter, ast);
+        if result.is_err() {
+            return result;
+        }
+    }
+    result
 }
 
 fn interpret_capturing(input: &str) -> (Result<Value, LoxError>, String) {
@@ -388,6 +394,32 @@ fn test_expr_statement_no_output() {
     let (result, output) = interpret_capturing("42;");
     assert_eq!(result.unwrap(), Value::Number(42.0));
     assert_eq!(output, "");
+}
+
+// === Variable Declaration ===
+
+#[test]
+fn test_var_declaration() {
+    let result = interpret("var x = 42; x;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_var_string() {
+    let result = interpret("var s = \"hello\"; s;").unwrap();
+    assert_eq!(result, Value::Str("hello".to_string()));
+}
+
+#[test]
+fn test_var_in_expression() {
+    let result = interpret("var x = 2; x * 3;").unwrap();
+    assert_eq!(result, Value::Number(6.0));
+}
+
+#[test]
+fn test_undefined_variable_is_error() {
+    let result = interpret("x;");
+    assert!(result.is_err());
 }
 
 // === Type Errors ===

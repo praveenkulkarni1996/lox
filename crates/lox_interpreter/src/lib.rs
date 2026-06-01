@@ -8,9 +8,10 @@
 pub enum LoxError {
     #[error("Cannot Convert {0} to Number")]
     NumberConversionError(Value),
-}
 
-use std::fmt;
+    #[error("Could not find variable {0}.")]
+    VariableNotFound(String),
+}
 
 use lox_parser::{
     self,
@@ -20,14 +21,14 @@ use lox_parser::{
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Eq,
     AstFactor::{Div, Mul, Unary},
-    AstPrimary::{False, Group, Nil, Number, Str, True},
+    AstPrimary::{False, Group, Id, Nil, Number, Str, True},
     AstStatement::{Expr, Print},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
 };
 
 /// A runtime value produced by evaluating a Lox expression.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Value {
     /// A floating-point number.
     Number(f64),
@@ -60,7 +61,7 @@ impl std::fmt::Display for Value {
     /// print values. I am not precisely following the letter of the law.
     ///
     /// Reference: <https://craftinginterpreters.com/evaluating-expressions.html#hooking-up-the-interpreter>
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Nil => write!(f, "nil"),
             Value::Number(num) => write!(f, "{}", num),
@@ -115,7 +116,10 @@ fn eval_primary<W: std::io::Write>(
         False => Ok(Value::Boolean(false)),
         Nil => Ok(Value::Nil),
         Group(expr) => Ok(eval_expression(interpreter, *expr)?),
-        _ => todo!("evaluate identifier:walk"),
+        Id(identifier) => match interpreter.env.get(&identifier) {
+            Some(value) => Ok(value.clone()),
+            None => Err(LoxError::VariableNotFound(identifier)),
+        },
     }
 }
 
@@ -249,7 +253,11 @@ fn eval_declaration<W: std::io::Write>(
     ast: lox_parser::AstDeclaration,
 ) -> Result<Value, LoxError> {
     match ast {
-        VarDeclare(_, _) => todo!("add support for variable declaration"),
+        VarDeclare(name, expr) => {
+            let value = eval_expression(interpreter, expr)?;
+            interpreter.env.insert(name, value);
+            Ok(Value::Nil)
+        }
         Statement(stmt) => eval_statement(interpreter, stmt),
     }
 }
