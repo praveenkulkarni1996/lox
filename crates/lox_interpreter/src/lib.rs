@@ -20,7 +20,7 @@ use lox_parser::{
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Eq,
     AstFactor::{Div, Mul, Unary},
-    AstPrimary::{False, Nil, Number, Str, True},
+    AstPrimary::{False, Group, Nil, Number, Str, True},
     AstStatement::{Expr, Print},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
@@ -105,7 +105,7 @@ impl<W: std::io::Write> Interpreter<W> {
 }
 
 fn eval_primary<W: std::io::Write>(
-    _interpreter: &Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstPrimary,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -114,7 +114,8 @@ fn eval_primary<W: std::io::Write>(
         True => Ok(Value::Boolean(true)),
         False => Ok(Value::Boolean(false)),
         Nil => Ok(Value::Nil),
-        _ => todo!("evaluate groups and identifier:walk"),
+        Group(expr) => Ok(eval_expression(interpreter, *expr)?),
+        _ => todo!("evaluate identifier:walk"),
     }
 }
 

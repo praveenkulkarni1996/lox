@@ -57,6 +57,27 @@ fn test_nil() {
     assert_eq!(result, Value::Nil);
 }
 
+// === Grouping ===
+
+#[test]
+fn test_group_literal() {
+    let result = interpret("(42);").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_group_expression() {
+    let result = interpret("(1 + 2);").unwrap();
+    assert_eq!(result, Value::Number(3.0));
+}
+
+#[test]
+fn test_group_overrides_precedence() {
+    // without grouping: 1 + 2 * 3 = 7; with grouping: (1 + 2) * 3 = 9
+    let result = interpret("(1 + 2) * 3;").unwrap();
+    assert_eq!(result, Value::Number(9.0));
+}
+
 // === Unary Expressions ===
 
 #[test]
