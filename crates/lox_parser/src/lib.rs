@@ -1,7 +1,5 @@
 use std::iter::Iterator;
 
-use crate::AstPrimary::Id;
-
 type AstIdentifier = String;
 
 pub enum AstPrimary {
@@ -103,7 +101,7 @@ where
         lox_lexer::Token::True => Some(AstPrimary::True),
         lox_lexer::Token::False => Some(AstPrimary::False),
         lox_lexer::Token::Nil => Some(AstPrimary::Nil),
-        lox_lexer::Token::Identifier(_) => Some(Id(parse_id(head)?)),
+        lox_lexer::Token::Identifier(_) => Some(AstPrimary::Id(parse_id(head)?)),
         lox_lexer::Token::LParens => {
             let expr = parse_expr(p.tokens.next()?, p)?;
             match p.tokens.next()? {
@@ -252,7 +250,7 @@ where
     if let Some(_unused) = p.tokens.next_if_eq(&lox_lexer::Token::Equal) {
         match eq {
             Some(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                AstFactor::Unary(AstUnary::Primary(Id(identifier))),
+                AstFactor::Unary(AstUnary::Primary(AstPrimary::Id(identifier))),
             )))) => {
                 let value = parse_assignment(p.tokens.next()?, p)?;
                 Some(AstAssignment::Assign(identifier, Box::new(value)))
