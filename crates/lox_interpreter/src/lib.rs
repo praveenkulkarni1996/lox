@@ -273,6 +273,21 @@ fn eval_block<W: std::io::Write>(
     Ok(Value::Nil)
 }
 
+fn eval_if<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    condition: lox_parser::AstExpression,
+    then_branch: lox_parser::AstStatement,
+    else_branch: Option<Box<lox_parser::AstStatement>>,
+) -> Result<Value, LoxError> {
+    if bool::from(eval_expression(interpreter, condition)?) {
+        eval_statement(interpreter, then_branch)
+    } else if let Some(else_branch) = else_branch {
+        eval_statement(interpreter, *else_branch)
+    } else {
+        Ok(Value::Nil)
+    }
+}
+
 fn eval_statement<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     ast: lox_parser::AstStatement,
@@ -285,7 +300,7 @@ fn eval_statement<W: std::io::Write>(
             Ok(Value::Nil)
         }
         Block(decls) => eval_block(interpreter, decls),
-        If(..) => todo!(),
+        If(cond, then_branch, else_branch) => eval_if(interpreter, cond, *then_branch, else_branch),
     }
 }
 

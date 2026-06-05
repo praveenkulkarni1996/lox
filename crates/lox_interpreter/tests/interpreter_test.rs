@@ -503,6 +503,53 @@ fn test_nested_blocks_with_shadowing() {
     assert_eq!(result, Value::Number(1.0));
 }
 
+// === If Statements ===
+
+#[test]
+fn test_if_then_branch_taken() {
+    let result = interpret("var x = 0; if (true) x = 1; x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_if_then_branch_skipped_without_else() {
+    let result = interpret("var x = 0; if (false) x = 1; x;").unwrap();
+    assert_eq!(result, Value::Number(0.0));
+}
+
+#[test]
+fn test_if_else_branch_taken() {
+    let result = interpret("var x = 0; if (false) x = 1; else x = 2; x;").unwrap();
+    assert_eq!(result, Value::Number(2.0));
+}
+
+#[test]
+fn test_if_truthy_non_boolean_condition() {
+    // Numbers are truthy, so the then-branch runs.
+    let result = interpret("var x = 0; if (1) x = 1; x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_if_nil_condition_is_falsey() {
+    let result = interpret("var x = 0; if (nil) x = 1; else x = 2; x;").unwrap();
+    assert_eq!(result, Value::Number(2.0));
+}
+
+#[test]
+fn test_if_block_body_opens_scope() {
+    // A block branch declares its own x; the outer x is untouched.
+    let result = interpret("var x = 1; if (true) { var x = 9; } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_if_print_in_branch() {
+    let (result, output) = interpret_capturing("if (true) print 42;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "42\n");
+}
+
 // === Type Errors ===
 
 #[test]
