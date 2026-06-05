@@ -55,6 +55,7 @@ pub enum AstExpression {
 pub enum AstStatement {
     Expr(AstExpression),
     Print(AstExpression),
+    Block(Vec<AstDeclaration>),
 }
 
 pub enum AstDeclaration {
@@ -282,6 +283,18 @@ where
                 lox_lexer::Token::Semicolon => Some(AstStatement::Print(expr)),
                 _ => None,
             }
+        }
+        lox_lexer::Token::LBrace => {
+            let mut decls = vec![];
+            while let Some(tok) = p.tokens.peek() {
+                if tok == &lox_lexer::Token::RBrace {
+                    break;
+                }
+                let head = p.tokens.next()?;
+                decls.push(parse_declaration(head, p)?);
+            }
+            p.tokens.next_if_eq(&lox_lexer::Token::RBrace)?;
+            Some(AstStatement::Block(decls))
         }
         _ => {
             let expr = parse_expr(head, p)?;

@@ -29,7 +29,7 @@ use lox_parser::{
     AstExpression::Assignment,
     AstFactor::{Div, Mul, Unary},
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
-    AstStatement::{Expr, Print},
+    AstStatement::{Block, Expr, Print},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
 };
@@ -266,6 +266,7 @@ fn eval_statement<W: std::io::Write>(
             writeln!(interpreter.out.borrow_mut(), "{}", result).unwrap();
             Ok(Value::Nil)
         }
+        Block(_) => todo!("block evaluation not yet implemented"),
     }
 }
 

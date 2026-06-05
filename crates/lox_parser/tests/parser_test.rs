@@ -519,3 +519,47 @@ fn test_identifier() {
         ))))) if name == "foo"
     ));
 }
+
+// === Block Statements ===
+
+#[test]
+fn test_empty_block() {
+    let ast = parse("{}").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Block(ref decls))) if decls.is_empty()
+    ));
+}
+
+#[test]
+fn test_block_with_single_statement() {
+    let ast = parse("{ 42; }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Block(ref decls))) if decls.len() == 1
+    ));
+}
+
+#[test]
+fn test_block_with_multiple_declarations() {
+    let ast = parse("{ var x = 1; 42; }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Block(ref decls))) if decls.len() == 2
+    ));
+}
+
+#[test]
+fn test_nested_blocks() {
+    let ast = parse("{ { 42; } }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Block(ref decls))) if decls.len() == 1
+    ));
+}
+
+#[test]
+fn test_unterminated_block_is_error() {
+    let result = parse("{ 42;");
+    assert!(result.is_none());
+}
