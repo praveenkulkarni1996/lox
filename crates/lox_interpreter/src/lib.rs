@@ -17,6 +17,9 @@ pub enum LoxError {
 
     #[error("Could not find variable {0}.")]
     VariableNotFound(String),
+
+    #[error("I/O error while writing output: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 use lox_parser::{
@@ -299,7 +302,7 @@ fn eval_statement<W: std::io::Write>(
         Expr(expr) => eval_expression(interpreter, expr),
         Print(expr) => {
             let result = eval_expression(interpreter, expr)?;
-            writeln!(interpreter.out.borrow_mut(), "{}", result).unwrap();
+            writeln!(interpreter.out.borrow_mut(), "{}", result)?;
             Ok(Value::Nil)
         }
         Block(decls) => eval_block(interpreter, decls),

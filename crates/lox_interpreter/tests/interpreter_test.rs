@@ -555,3 +555,29 @@ fn test_compare_non_numbers_is_error() {
     let result = interpret("true < 1;");
     assert!(result.is_err());
 }
+
+// === Output Errors ===
+
+/// A writer that always fails, simulating a closed/broken stdout (e.g. piping
+/// `lox script.lox | head`).
+struct FailingWriter;
+
+impl std::io::Write for FailingWriter {
+    fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::BrokenPipe,
+            "broken pipe",
+        ))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+#[test]
+fn test_print_to_broken_writer_is_error_not_panic() {
+    let interpreter = Interpreter::new(FailingWriter);
+    let result = run("print 1;", &interpreter);
+    assert!(matches!(result, Err(LoxError::Io(_))));
+}
