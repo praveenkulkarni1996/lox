@@ -86,6 +86,19 @@ where
     }
 }
 
+/// Parse a source string into its first top-level AST node.
+///
+/// Returns `None` on a parse error or empty input. This is a convenience
+/// wrapper that lexes `input` and pulls a single declaration from the parser.
+///
+// TODO: This only returns the first declaration. Rename it (e.g.
+// `parse_first`) or extend it to parse a whole program once multi-statement
+// programs need a single entry point.
+pub fn parse(input: &str) -> Option<Ast> {
+    let mut parser = Parser::new(lox_lexer::Lexer::new(input.chars()));
+    parser.next()
+}
+
 fn parse_id(head: lox_lexer::Token) -> Option<AstIdentifier> {
     match head {
         lox_lexer::Token::Identifier(var) => Some(var),
