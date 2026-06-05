@@ -1,32 +1,12 @@
-use lox_interpreter::{Interpreter, LoxError, Value, eval};
-use lox_lexer::Lexer;
-use lox_parser::Parser;
+use lox_interpreter::{Interpreter, LoxError, Value, run};
 
 fn interpret(input: &str) -> Result<Value, LoxError> {
-    let tokens = Lexer::new(input.chars());
-    let mut parser = Parser::new(tokens);
-    let interpreter = Interpreter::new(std::io::stdout());
-    let mut result = Ok(Value::Nil);
-    for ast in &mut parser {
-        result = eval(&interpreter, ast);
-        if result.is_err() {
-            return result;
-        }
-    }
-    result
+    run(input, &Interpreter::new(std::io::stdout()))
 }
 
 fn interpret_capturing(input: &str) -> (Result<Value, LoxError>, String) {
-    let tokens = Lexer::new(input.chars());
-    let mut parser = Parser::new(tokens);
     let interpreter = Interpreter::new(Vec::new());
-    let mut result = Ok(Value::Nil);
-    for ast in &mut parser {
-        result = eval(&interpreter, ast);
-        if result.is_err() {
-            break;
-        }
-    }
+    let result = run(input, &interpreter);
     let output = String::from_utf8(interpreter.out.borrow().clone()).unwrap();
     (result, output)
 }

@@ -34,6 +34,9 @@ use lox_parser::{
     AstUnary::{Negative, Not, Primary},
 };
 
+use lox_lexer::Lexer;
+use lox_parser::Parser;
+
 /// A runtime value produced by evaluating a Lox expression.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -325,4 +328,34 @@ pub fn eval<W: std::io::Write>(
     match ast {
         Declare(decl) => eval_declaration(interpreter, decl),
     }
+}
+
+/// Lex, parse, and evaluate an entire source string against `interpreter`,
+/// returning the value of the last declaration (or the first error).
+///
+/// The interpreter is borrowed rather than owned so that callers can reuse it
+/// across multiple `run` calls — this is what lets the REPL persist variables
+/// between lines, and lets tests inspect a captured writer afterwards.
+///
+/// # Examples
+///
+/// ```
+/// use lox_interpreter::{Interpreter, Value, run};
+///
+/// let interpreter = Interpreter::new(Vec::new());
+/// assert_eq!(run("var x = 41; x + 1;", &interpreter).unwrap(), Value::Number(42.0));
+/// ```
+pub fn run<W: std::io::Write>(
+    source: &str,
+    interpreter: &Interpreter<W>,
+) -> Result<Value, LoxError> {
+    let parser = Parser::new(Lexer::new(source.chars()));
+    let mut result = Value::Nil;
+    // NOTE: parse errors currently truncate silently — the Parser iterator
+    // yields None for both clean EOF and a parse failure. Surfacing them is
+    // tracked in issue #5.
+    for ast in parser {
+        result = eval(interpreter, ast)?;
+    }
+    Ok(result)
 }
