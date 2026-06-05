@@ -468,6 +468,41 @@ fn test_assignment_to_undeclared_is_error() {
     assert!(result.is_err());
 }
 
+// === Block Scoping ===
+
+#[test]
+fn test_block_outer_variable_readable_inside() {
+    // y = x inside the block — proves x is readable from the inner scope.
+    let result = interpret("var x = 42; var y = 0; { y = x; } y;").unwrap();
+    assert_eq!(result, Value::Number(42.0));
+}
+
+#[test]
+fn test_block_inner_variable_not_visible_outside() {
+    let result = interpret("{ var x = 42; } x;");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_block_inner_shadows_outer() {
+    // The inner x shadows the outer; outer is unchanged after block exits.
+    let result = interpret("var x = 1; { var x = 99; } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_block_assignment_to_outer_persists() {
+    // Assigning to an outer variable from inside a block updates it.
+    let result = interpret("var x = 1; { x = 99; } x;").unwrap();
+    assert_eq!(result, Value::Number(99.0));
+}
+
+#[test]
+fn test_nested_blocks_with_shadowing() {
+    let result = interpret("var x = 1; { var x = 2; { var x = 3; } } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
 // === Type Errors ===
 
 #[test]

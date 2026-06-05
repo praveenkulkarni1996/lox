@@ -113,6 +113,13 @@ impl<W: std::io::Write> Interpreter<W> {
             env: Environment::new(),
         }
     }
+
+    fn child(&self) -> Self {
+        Interpreter {
+            out: Rc::clone(&self.out),
+            env: Environment::child_of(&self.env),
+        }
+    }
 }
 
 fn eval_primary<W: std::io::Write>(
@@ -255,6 +262,17 @@ fn eval_expression<W: std::io::Write>(
     }
 }
 
+fn eval_block<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    decls: Vec<lox_parser::AstDeclaration>,
+) -> Result<Value, LoxError> {
+    let child = interpreter.child();
+    for decl in decls {
+        eval_declaration(&child, decl)?;
+    }
+    Ok(Value::Nil)
+}
+
 fn eval_statement<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     ast: lox_parser::AstStatement,
@@ -266,7 +284,7 @@ fn eval_statement<W: std::io::Write>(
             writeln!(interpreter.out.borrow_mut(), "{}", result).unwrap();
             Ok(Value::Nil)
         }
-        Block(_) => todo!("block evaluation not yet implemented"),
+        Block(decls) => eval_block(interpreter, decls),
     }
 }
 
