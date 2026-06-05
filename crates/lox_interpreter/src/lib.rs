@@ -99,7 +99,7 @@ pub struct Interpreter<W>
 where
     W: std::io::Write,
 {
-    /// The output writer, shared via Rc<RefCell<W>> so that child interpreters
+    /// The output writer, shared via `Rc<RefCell<W>>` so that child interpreters
     /// created for block scopes write to the same output.
     pub out: Rc<RefCell<W>>,
     /// The current environment. Child interpreters hold a child of this env.

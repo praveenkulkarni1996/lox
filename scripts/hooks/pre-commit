@@ -13,6 +13,6 @@ echo "  Running tests..."
 cargo test
 
 echo "  Building documentation..."
-cargo doc --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
 
 echo "✓ All pre-commit checks passed!"
