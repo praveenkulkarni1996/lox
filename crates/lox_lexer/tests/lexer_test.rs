@@ -131,3 +131,19 @@ fn test_complex_input() {
     assert!(matches!(tokens[20], Token::Comma));
     assert!(matches!(tokens[21], Token::Identifier(ref s) if s == "abd_"));
 }
+
+#[test]
+fn test_standalone_dot() {
+    let tokens = lex(".");
+    assert_eq!(tokens.len(), 1);
+    assert!(matches!(tokens[0], Token::Dot));
+}
+
+#[test]
+fn test_dot_between_identifiers() {
+    let tokens = lex("a.b");
+    assert_eq!(tokens.len(), 3);
+    assert!(matches!(tokens[0], Token::Identifier(ref s) if s == "a"));
+    assert!(matches!(tokens[1], Token::Dot));
+    assert!(matches!(tokens[2], Token::Identifier(ref s) if s == "b"));
+}

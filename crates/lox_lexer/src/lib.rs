@@ -22,8 +22,9 @@
 ///
 /// Tokens represent the smallest meaningful units of source code: keywords, identifiers,
 /// literals, operators, and punctuation. Whitespace is automatically skipped by the lexer.
-/// Most variants are self-explanatory by name (e.g., `LBrace` for `{`, `True` for the
-/// `true` keyword). `Error` represents a lexically invalid character or sequence.
+/// Most variants are self-explanatory by name (e.g., `LBrace` for `{`, `Dot` for `.`,
+/// `True` for the `true` keyword). `Error` represents a lexically invalid character or
+/// sequence.
 #[derive(Debug, derive_more::Display, PartialEq)]
 pub enum Token {
     Error,
@@ -41,6 +42,7 @@ pub enum Token {
     LParens,
     RParens,
     Comma,
+    Dot,
     Minus,
     Plus,
     Semicolon,
@@ -237,6 +239,7 @@ where
                 '{' => Some(Token::LBrace),
                 '}' => Some(Token::RBrace),
                 ',' => Some(Token::Comma),
+                '.' => Some(Token::Dot),
                 '-' => Some(Token::Minus),
                 '+' => Some(Token::Plus),
                 ';' => Some(Token::Semicolon),
