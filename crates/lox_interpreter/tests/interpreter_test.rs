@@ -5,10 +5,10 @@ use lox_parser::Parser;
 fn interpret(input: &str) -> Result<Value, LoxError> {
     let tokens = Lexer::new(input.chars());
     let mut parser = Parser::new(tokens);
-    let mut interpreter = Interpreter::new(std::io::stdout());
+    let interpreter = Interpreter::new(std::io::stdout());
     let mut result = Ok(Value::Nil);
     for ast in &mut parser {
-        result = eval(&mut interpreter, ast);
+        result = eval(&interpreter, ast);
         if result.is_err() {
             return result;
         }
@@ -19,10 +19,16 @@ fn interpret(input: &str) -> Result<Value, LoxError> {
 fn interpret_capturing(input: &str) -> (Result<Value, LoxError>, String) {
     let tokens = Lexer::new(input.chars());
     let mut parser = Parser::new(tokens);
-    let ast = parser.next().expect("expected a parsed expression");
-    let mut interpreter = Interpreter::new(Vec::new());
-    let result = eval(&mut interpreter, ast);
-    (result, String::from_utf8(interpreter.out).unwrap())
+    let interpreter = Interpreter::new(Vec::new());
+    let mut result = Ok(Value::Nil);
+    for ast in &mut parser {
+        result = eval(&interpreter, ast);
+        if result.is_err() {
+            break;
+        }
+    }
+    let output = String::from_utf8(interpreter.out.borrow().clone()).unwrap();
+    (result, output)
 }
 
 // === Primary Literals ===

@@ -7,6 +7,9 @@
 pub mod environment;
 pub use environment::Environment;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 #[derive(thiserror::Error, Debug)]
 pub enum LoxError {
     #[error("Cannot Convert {0} to Number")]
@@ -47,7 +50,7 @@ pub enum Value {
 impl From<Value> for bool {
     /// Truthiness conversion for Lox values.
     ///
-    /// Lox follows Ruby’s simple rule: `false` and `nil` are falsey,
+    /// Lox follows Ruby's simple rule: `false` and `nil` are falsey,
     /// and everything else is truthy.
     ///
     /// Reference: <https://craftinginterpreters.com/evaluating-expressions.html#truthiness-and-falsiness>
@@ -78,7 +81,7 @@ impl std::fmt::Display for Value {
 impl TryFrom<Value> for f64 {
     type Error = LoxError;
 
-    /// Lox follows Ruby’s simple rule: `false` and `nil` are falsey,
+    /// Lox follows Ruby's simple rule: `false` and `nil` are falsey,
     /// and everything else is truthy.
     ///
     /// Reference: <https://craftinginterpreters.com/evaluating-expressions.html#detecting-runtime-errors>
@@ -96,21 +99,24 @@ pub struct Interpreter<W>
 where
     W: std::io::Write,
 {
-    pub out: W,
-    pub env: Environment<'static>,
+    /// The output writer, shared via Rc<RefCell<W>> so that child interpreters
+    /// created for block scopes write to the same output.
+    pub out: Rc<RefCell<W>>,
+    /// The current environment. Child interpreters hold a child of this env.
+    pub env: Rc<Environment>,
 }
 
 impl<W: std::io::Write> Interpreter<W> {
     pub fn new(out: W) -> Self {
         Interpreter {
-            out,
+            out: Rc::new(RefCell::new(out)),
             env: Environment::new(),
         }
     }
 }
 
 fn eval_primary<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstPrimary,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -125,7 +131,7 @@ fn eval_primary<W: std::io::Write>(
 }
 
 fn eval_unary<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstUnary,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -141,7 +147,7 @@ fn eval_unary<W: std::io::Write>(
 }
 
 fn eval_factor<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstFactor,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -160,7 +166,7 @@ fn eval_factor<W: std::io::Write>(
 }
 
 fn eval_term<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstTerm,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -179,7 +185,7 @@ fn eval_term<W: std::io::Write>(
 }
 
 fn eval_comparison<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstComparison,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -208,7 +214,7 @@ fn eval_comparison<W: std::io::Write>(
 }
 
 fn eval_equality<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstEquality,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -227,7 +233,7 @@ fn eval_equality<W: std::io::Write>(
 }
 
 fn eval_assignment<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstAssignment,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -241,7 +247,7 @@ fn eval_assignment<W: std::io::Write>(
 }
 
 fn eval_expression<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstExpression,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -250,21 +256,21 @@ fn eval_expression<W: std::io::Write>(
 }
 
 fn eval_statement<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstStatement,
 ) -> Result<Value, LoxError> {
     match ast {
         Expr(expr) => eval_expression(interpreter, expr),
         Print(expr) => {
             let result = eval_expression(interpreter, expr)?;
-            writeln!(interpreter.out, "{}", result).unwrap();
+            writeln!(interpreter.out.borrow_mut(), "{}", result).unwrap();
             Ok(Value::Nil)
         }
     }
 }
 
 fn eval_declaration<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::AstDeclaration,
 ) -> Result<Value, LoxError> {
     match ast {
@@ -278,7 +284,7 @@ fn eval_declaration<W: std::io::Write>(
 }
 
 pub fn eval<W: std::io::Write>(
-    interpreter: &mut Interpreter<W>,
+    interpreter: &Interpreter<W>,
     ast: lox_parser::Ast,
 ) -> Result<Value, LoxError> {
     match ast {

@@ -1,14 +1,15 @@
 #![deny(clippy::all)]
 
 use crate::{LoxError, Value};
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
 
-/// https://craftinginterpreters.com/statements-and-state.html#nesting-and-shadowing
+/// <https://craftinginterpreters.com/statements-and-state.html#nesting-and-shadowing>
 ///
 /// An environment is a "namespace" in which we can look at variables, and their namespaces.
 ///
-/// # Design: Interior Mutability via RefCell
+/// # Design: Interior Mutability via RefCell and shared ownership via Rc
 ///
 /// The environment uses `RefCell<HashMap<...>>` instead of a regular HashMap to enable interior
 /// mutability. This is necessary because we need to modify the variable map (via `declare` and
@@ -20,6 +21,11 @@ use std::collections::HashMap;
 /// we couldn't also hold references to parent environments. RefCell gives us runtime borrow
 /// checking, allowing methods like `declare(&self, ...)` and `update(&self, ...)` to mutate
 /// the internal HashMap via `borrow_mut()` without requiring a mutable reference to self.
+///
+/// The parent is stored as `Option<Rc<Environment>>`. `Rc` (reference counting) means the
+/// parent environment stays alive as long as any child holds a reference to it — no lifetime
+/// parameters needed. This allows child environments (and child `Interpreter{}` instances
+/// for block scopes) to be created and dropped freely without borrow-checker constraints.
 ///
 /// This pattern is common in Rust when you need shared ownership with interior mutability,
 /// such as when implementing scoped environments or symbol tables.
@@ -42,12 +48,12 @@ use std::collections::HashMap;
 /// let env = Environment::new();
 /// assert!(env.read("undefined").is_err());
 /// ```
-pub struct Environment<'a> {
+pub struct Environment {
     env: RefCell<HashMap<String, Value>>,
-    parent: Option<Cell<&'a Environment<'a>>>,
+    parent: Option<Rc<Environment>>,
 }
 
-impl<'a> Environment<'a> {
+impl Environment {
     /// Creates a new root environment with no parent.
     ///
     /// # Examples
@@ -59,36 +65,33 @@ impl<'a> Environment<'a> {
     /// env.declare("x", Value::Number(42.0));
     /// assert_eq!(env.read("x").unwrap(), Value::Number(42.0));
     /// ```
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Environment {
+    pub fn new() -> Rc<Self> {
+        Rc::new(Environment {
             env: RefCell::new(HashMap::new()),
             parent: None,
-        }
+        })
     }
 
     /// Creates a child environment with the given parent.
     ///
-    /// # Arguments
-    ///
-    /// * `parent` - A mutable reference to the parent environment.
+    /// The parent is kept alive by the child via `Rc` — no lifetime constraints needed.
     ///
     /// # Examples
     ///
     /// ```
     /// use lox_interpreter::{Environment, Value};
     ///
-    /// let mut parent = Environment::new();
+    /// let parent = Environment::new();
     /// parent.declare("x", Value::Number(42.0));
-    /// let child = Environment::child_of(&mut parent);
+    /// let child = Environment::child_of(&parent);
     /// // Child can access parent's variables
     /// assert_eq!(child.read("x").unwrap(), Value::Number(42.0));
     /// ```
-    pub fn child_of(parent: &'a Environment<'a>) -> Self {
-        Environment {
+    pub fn child_of(parent: &Rc<Environment>) -> Rc<Self> {
+        Rc::new(Environment {
             env: RefCell::new(HashMap::new()),
-            parent: Some(Cell::new(parent)),
-        }
+            parent: Some(Rc::clone(parent)),
+        })
     }
 
     /// Reads a variable from the environment.
@@ -96,29 +99,19 @@ impl<'a> Environment<'a> {
     /// If the variable is found in the current scope, its value is returned.
     /// Otherwise, the lookup continues in the parent environment recursively.
     ///
-    /// # Arguments
-    ///
-    /// * `variable` - The name of the variable to read.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Value)` - The value of the variable if found.
-    /// * `Err(LoxError::VariableNotFound)` - If the variable is not found in this or any parent environment.
-    ///
     /// # Examples
     ///
     /// ```
     /// use lox_interpreter::{Value, Environment};
     ///
-    /// let mut env = Environment::new();
+    /// let env = Environment::new();
     /// env.declare("x", Value::Number(42.0));
     /// assert_eq!(env.read("x").unwrap(), Value::Number(42.0));
     /// ```
     pub fn read(&self, variable: &str) -> Result<Value, LoxError> {
         if let Some(v) = self.env.borrow().get(variable) {
             Ok(v.clone())
-        } else if let Some(parent_cell) = &self.parent {
-            let parent = parent_cell.get();
+        } else if let Some(parent) = &self.parent {
             parent.read(variable)
         } else {
             Err(LoxError::VariableNotFound(String::from(variable)))
@@ -131,22 +124,12 @@ impl<'a> Environment<'a> {
     /// it is replaced and the old value is returned. Variables in parent
     /// scopes are not affected.
     ///
-    /// # Arguments
-    ///
-    /// * `variable` - The name of the variable to declare.
-    /// * `value` - The value to assign to the variable.
-    ///
-    /// # Returns
-    ///
-    /// * `Some(Value)` - The previous value if the variable was already declared.
-    /// * `None` - If this is a new variable declaration.
-    ///
     /// # Examples
     ///
     /// ```
     /// use lox_interpreter::{Value, Environment};
     ///
-    /// let mut env = Environment::new();
+    /// let env = Environment::new();
     /// let result = env.declare("x", Value::Number(42.0));
     /// assert_eq!(result, None);
     ///
@@ -164,22 +147,12 @@ impl<'a> Environment<'a> {
     /// and the old value is returned. If it doesn't exist locally, the lookup and
     /// update continues in the parent environment recursively.
     ///
-    /// # Arguments
-    ///
-    /// * `variable` - The name of the variable to update.
-    /// * `after` - The new value for the variable.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Value)` - The previous value of the variable.
-    /// * `Err(LoxError::VariableNotFound)` - If the variable is not found in this or any parent environment.
-    ///
     /// # Examples
     ///
     /// ```
     /// use lox_interpreter::{Value, Environment};
     ///
-    /// let mut env = Environment::new();
+    /// let env = Environment::new();
     /// env.declare("x", Value::Number(42.0));
     /// let old = env.update("x", Value::Number(99.0)).unwrap();
     /// assert_eq!(old, Value::Number(42.0));
@@ -193,8 +166,7 @@ impl<'a> Environment<'a> {
             Ok(old)
         } else {
             drop(env_mut);
-            if let Some(parent_cell) = &self.parent {
-                let parent = parent_cell.get();
+            if let Some(parent) = &self.parent {
                 parent.update(variable, after)
             } else {
                 Err(LoxError::VariableNotFound(String::from(variable)))
