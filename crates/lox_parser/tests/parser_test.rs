@@ -563,3 +563,65 @@ fn test_unterminated_block_is_error() {
     let result = parse("{ 42;");
     assert!(result.is_none());
 }
+
+// === If Statements ===
+
+#[test]
+fn test_if_without_else() {
+    let ast = parse("if (true) 1;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::If(_, _, None)))
+    ));
+}
+
+#[test]
+fn test_if_with_else() {
+    let ast = parse("if (true) 1; else 2;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::If(_, _, Some(_))))
+    ));
+}
+
+#[test]
+fn test_if_with_block_branches() {
+    let ast = parse("if (x) { 1; } else { 2; }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::If(
+            _,
+            ref then_branch,
+            Some(ref else_branch),
+        )))
+            if matches!(**then_branch, AstStatement::Block(_))
+                && matches!(**else_branch, AstStatement::Block(_))
+    ));
+}
+
+#[test]
+fn test_dangling_else_binds_to_nearest_if() {
+    // The `else` binds to the inner `if`, so the outer `if` has no else branch.
+    let ast = parse("if (a) if (b) 1; else 2;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::If(
+            _,
+            ref then_branch,
+            None,
+        )))
+            if matches!(**then_branch, AstStatement::If(_, _, Some(_)))
+    ));
+}
+
+#[test]
+fn test_if_missing_open_paren_is_error() {
+    let result = parse("if true) 1;");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_if_missing_body_is_error() {
+    let result = parse("if (true)");
+    assert!(result.is_none());
+}

@@ -56,6 +56,7 @@ pub enum AstStatement {
     Expr(AstExpression),
     Print(AstExpression),
     Block(Vec<AstDeclaration>),
+    If(AstExpression, Box<AstStatement>, Option<Box<AstStatement>>),
 }
 
 pub enum AstDeclaration {
@@ -295,6 +296,21 @@ where
             }
             p.tokens.next_if_eq(&lox_lexer::Token::RBrace)?;
             Some(AstStatement::Block(decls))
+        }
+        lox_lexer::Token::If => {
+            p.tokens.next_if_eq(&lox_lexer::Token::LParens)?;
+            let condition = parse_expr(p.tokens.next()?, p)?;
+            p.tokens.next_if_eq(&lox_lexer::Token::RParens)?;
+            let then_branch = parse_statement(p.tokens.next()?, p)?;
+            let else_branch = match p.tokens.next_if_eq(&lox_lexer::Token::Else) {
+                Some(_) => Some(Box::new(parse_statement(p.tokens.next()?, p)?)),
+                None => None,
+            };
+            Some(AstStatement::If(
+                condition,
+                Box::new(then_branch),
+                else_branch,
+            ))
         }
         _ => {
             let expr = parse_expr(head, p)?;

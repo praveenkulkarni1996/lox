@@ -29,7 +29,7 @@ use lox_parser::{
     AstExpression::Assignment,
     AstFactor::{Div, Mul, Unary},
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
-    AstStatement::{Block, Expr, Print},
+    AstStatement::{Block, Expr, If, Print},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
 };
@@ -285,6 +285,7 @@ fn eval_statement<W: std::io::Write>(
             Ok(Value::Nil)
         }
         Block(decls) => eval_block(interpreter, decls),
+        If(..) => todo!(),
     }
 }
 
