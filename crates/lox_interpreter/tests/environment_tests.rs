@@ -326,12 +326,4 @@ fn test_parent_child_lifecycle() {
     // we can verify that the child's modifications affected the parent
     assert_eq!(x_value_in_child, Value::Number(99.0));
     assert_eq!(parent.read("x").unwrap(), Value::Number(99.0));
-
-    // This test demonstrates that with the borrowed reference approach,
-    // parent is NOT consumed/moved into child, so it remains accessible.
-    // However, due to Rust's borrow checker, we can't directly access parent
-    // after creating a child borrow in the same scope.
-    //
-    // The key insight: The borrowed reference approach is conceptually correct for
-    // supporting parent re-use, but Rust's lifetime system makes it awkward in practice.
 }
