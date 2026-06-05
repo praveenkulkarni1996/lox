@@ -108,12 +108,10 @@ fn scan_string(prefix: String, mut chars: impl Iterator<Item = char>) -> Token {
 
 fn scan_identifier(
     prefix: String,
-    chars: &mut std::iter::Peekable<impl Iterator<Item = char>>,
+    chars: &mut itertools::PeekNth<impl Iterator<Item = char>>,
 ) -> Token {
-    if let Some(c) = chars.peek()
-        && (c.is_ascii_alphanumeric() || *c == '_')
-    {
-        scan_identifier(prefix + &chars.next().unwrap().to_string(), chars)
+    if let Some(c) = chars.next_if(|c| c.is_ascii_alphanumeric() || *c == '_') {
+        scan_identifier(prefix + &c.to_string(), chars)
     } else {
         try_keywordify(prefix)
     }
@@ -127,41 +125,23 @@ fn scan_comment(mut chars: impl Iterator<Item = char>) {
     }
 }
 
-fn scan_number(start: f64, chars: &mut std::iter::Peekable<impl Iterator<Item = char>>) -> Token {
+fn scan_number(start: f64, chars: &mut itertools::PeekNth<impl Iterator<Item = char>>) -> Token {
     let mut number = start;
-    while let Some(c) = chars.peek()
-        && '0' <= *c
-        && *c <= '9'
-    {
-        let digit: f64 = chars.next().unwrap().to_digit(10).unwrap().into();
-        number = (number * 10.0) + digit;
-    }
-    // if no decimal point - return early
-    if let Some(c) = chars.peek()
-        && *c != '.'
-    {
-        return Token::Number(number);
+    while let Some(c) = chars.next_if(|c| c.is_ascii_digit()) {
+        number = (number * 10.0) + f64::from(c.to_digit(10).unwrap());
     }
 
-    // TODO:
-    // I think there is a bug here, about trailing "." at the end of a file.
-    // In particular, we need to peek TWO characters in advance, which peekable does not
-    // support.
-    chars.next();
-    if let Some(c) = chars.peek()
-        && !('0' <= *c && *c <= '9')
-    {
-        return Token::Error;
-    }
-
-    let mut position: f64 = 1.0;
-    while let Some(c) = chars.peek()
-        && '0' <= *c
-        && *c <= '9'
-    {
-        let digit: f64 = chars.next().unwrap().to_digit(10).unwrap().into();
-        position *= 0.1;
-        number += digit * position;
+    // A fractional part needs a digit *after* the '.'. Looking two chars ahead lets
+    // us consume the '.' only when it really starts a fraction; otherwise it is left
+    // in the stream and lexed as `Token::Dot` on the next call. This distinguishes
+    // `123.5` (one number) from `123.` and `123.foo`.
+    if chars.peek() == Some(&'.') && chars.peek_nth(1).is_some_and(|c| c.is_ascii_digit()) {
+        chars.next(); // consume the '.'
+        let mut position: f64 = 1.0;
+        while let Some(c) = chars.next_if(|c| c.is_ascii_digit()) {
+            position *= 0.1;
+            number += f64::from(c.to_digit(10).unwrap()) * position;
+        }
     }
     Token::Number(number)
 }
@@ -192,7 +172,7 @@ pub struct Lexer<I>
 where
     I: Iterator<Item = char>,
 {
-    chars: std::iter::Peekable<I>,
+    chars: itertools::PeekNth<I>,
 }
 
 impl<I> Lexer<I>
@@ -215,7 +195,7 @@ where
     /// ```
     pub fn new(chars: I) -> Self {
         Lexer {
-            chars: chars.peekable(),
+            chars: itertools::peek_nth(chars),
         }
     }
 }
@@ -283,7 +263,7 @@ where
                 },
                 // Numbers
                 '0'..='9' => Some(scan_number(
-                    me.to_digit(10).unwrap().into(),
+                    f64::from(me.to_digit(10).unwrap()),
                     &mut self.chars,
                 )),
                 'a'..='z' | 'A'..='Z' | '_' => {

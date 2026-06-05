@@ -5,3 +5,4 @@ edition.workspace = true
 
 [dependencies]
 derive_more = { version = "2.1.1", features = ["display"] }
+itertools = "0.14"

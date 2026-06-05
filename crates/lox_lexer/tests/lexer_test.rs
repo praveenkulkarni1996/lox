@@ -133,6 +133,39 @@ fn test_complex_input() {
 }
 
 #[test]
+fn test_decimal_number() {
+    let tokens = lex("123.5");
+    assert_eq!(tokens.len(), 1);
+    assert!(matches!(tokens[0], Token::Number(n) if n == 123.5));
+}
+
+#[test]
+fn test_trailing_dot_is_number_then_dot() {
+    let tokens = lex("123.");
+    assert_eq!(tokens.len(), 2);
+    assert!(matches!(tokens[0], Token::Number(n) if n == 123.0));
+    assert!(matches!(tokens[1], Token::Dot));
+}
+
+#[test]
+fn test_number_dot_identifier() {
+    let tokens = lex("123.foo");
+    assert_eq!(tokens.len(), 3);
+    assert!(matches!(tokens[0], Token::Number(n) if n == 123.0));
+    assert!(matches!(tokens[1], Token::Dot));
+    assert!(matches!(tokens[2], Token::Identifier(ref s) if s == "foo"));
+}
+
+#[test]
+fn test_number_with_two_dots() {
+    let tokens = lex("1.2.3");
+    assert_eq!(tokens.len(), 3);
+    assert!(matches!(tokens[0], Token::Number(n) if n == 1.2));
+    assert!(matches!(tokens[1], Token::Dot));
+    assert!(matches!(tokens[2], Token::Number(n) if n == 3.0));
+}
+
+#[test]
 fn test_standalone_dot() {
     let tokens = lex(".");
     assert_eq!(tokens.len(), 1);
