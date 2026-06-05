@@ -96,27 +96,31 @@ fn run_repl() -> ExitCode {
 
     loop {
         print!("> ");
-        if std::io::stdout().flush().is_err() {
-            break;
+        if let Err(error) = std::io::stdout().flush() {
+            eprintln!("error: {error}");
+            return ExitCode::from(74); // EX_IOERR
         }
 
         line.clear();
         match stdin.read_line(&mut line) {
-            Ok(0) => break, // EOF (Ctrl-D)
+            Ok(0) => return ExitCode::SUCCESS, // EOF (Ctrl-D)
             Ok(_) => {}
             Err(error) => {
                 eprintln!("error: {error}");
-                break;
+                return ExitCode::from(74); // EX_IOERR
             }
         }
 
         match run(&line, &interpreter) {
             // Statements evaluate to Nil; only echo a meaningful expression value.
             Ok(Value::Nil) => {}
-            Ok(value) => println!("{value}"),
+            Ok(value) => {
+                if let Err(error) = writeln!(std::io::stdout(), "{value}") {
+                    eprintln!("error: {error}");
+                    return ExitCode::from(74); // EX_IOERR
+                }
+            }
             Err(error) => eprintln!("{error}"),
         }
     }
-
-    ExitCode::SUCCESS
 }
