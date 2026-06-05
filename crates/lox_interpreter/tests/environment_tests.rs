@@ -77,12 +77,12 @@ fn test_read_undefined_variable_error_contains_name() {
 #[test]
 fn test_read_different_types() {
     let env = Environment::new();
-    env.declare("num", Value::Number(3.14));
+    env.declare("num", Value::Number(3.5));
     env.declare("str", Value::Str("test".to_string()));
     env.declare("bool", Value::Boolean(false));
     env.declare("nil", Value::Nil);
 
-    assert_eq!(env.read("num").unwrap(), Value::Number(3.14));
+    assert_eq!(env.read("num").unwrap(), Value::Number(3.5));
     assert_eq!(env.read("str").unwrap(), Value::Str("test".to_string()));
     assert_eq!(env.read("bool").unwrap(), Value::Boolean(false));
     assert_eq!(env.read("nil").unwrap(), Value::Nil);
