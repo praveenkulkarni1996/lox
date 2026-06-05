@@ -7,12 +7,14 @@ echo "  Checking formatting..."
 cargo fmt --check
 
 echo "  Running clippy..."
-cargo clippy -- -D warnings
+# --all-targets so tests, examples, and benches are linted too, not just
+# lib + bins (otherwise lints in tests/ stay latent).
+cargo clippy --workspace --all-targets -- -D warnings
 
 echo "  Running tests..."
-cargo test
+cargo test --workspace
 
 echo "  Building documentation..."
-RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps
 
 echo "✓ All pre-commit checks passed!"
