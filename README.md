@@ -6,12 +6,18 @@ A Rust implementation of the Lox programming language from [Crafting Interpreter
 
 ### Pre-commit Hooks
 
-This project uses git pre-commit hooks to ensure code quality. Before committing, the following checks are automatically run:
+This project uses git hooks to ensure code quality and commit message style. The following checks run automatically:
 
+**Pre-commit** (`scripts/hooks/pre-commit`):
 - `cargo fmt --check` - Code formatting
 - `cargo clippy -- -D warnings` - Linting (treats warnings as errors)
 - `cargo test` - Unit and integration tests
 - `cargo doc --no-deps` - Documentation builds
+
+**Commit-msg** (`scripts/hooks/commit-msg`):
+- Subject line must end with a period
+- A blank line must separate the subject from the body
+- AI co-author attribution (e.g. `Co-Authored-By: Claude`) is not allowed
 
 #### First Time Setup
 
