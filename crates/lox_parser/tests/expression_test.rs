@@ -7,11 +7,11 @@ fn test_number_literal() {
     let ast = parse("42;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Number(n)
             ))))
-        )))))) if n == 42.0
+        ), None), None)))))) if n == 42.0
     ));
 }
 
@@ -20,11 +20,11 @@ fn test_decimal_number() {
     let ast = parse("1.25;").unwrap();
     assert!(matches!(
         ast,
-        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Number(n)
             ))))
-        )))))) if (n - 1.25).abs() < f64::EPSILON
+        ), None), None)))))) if (n - 1.25).abs() < f64::EPSILON
     ));
 }
 
@@ -33,11 +33,11 @@ fn test_string_literal() {
     let ast = parse("\"hello\";").unwrap();
     assert!(matches!(
         ast,
-        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
             AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
                 AstPrimary::Str(ref s)
             ))))
-        )))))) if s == "hello"
+        ), None), None)))))) if s == "hello"
     ));
 }
 
@@ -47,10 +47,14 @@ fn test_true_literal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                    AstPrimary::True
-                ))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Primary(AstPrimary::True))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -62,10 +66,14 @@ fn test_false_literal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                    AstPrimary::False
-                ))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Primary(AstPrimary::False))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -77,10 +85,14 @@ fn test_nil_literal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                    AstPrimary::Nil
-                ))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Nil))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -92,10 +104,10 @@ fn test_identifier() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-            AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+            AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
                 AstUnary::Primary(AstPrimary::Id(ref name))
-            ))))
-        ))))) if name == "foo"
+            )))), None), None))
+        )))) if name == "foo"
     ));
 }
 
@@ -107,8 +119,14 @@ fn test_negation() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Negative(_))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Negative(_))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -120,8 +138,14 @@ fn test_not() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Not(_))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Not(_))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -132,9 +156,15 @@ fn test_double_negation() {
     let ast = parse("--1;").unwrap();
     // --1 should be Negative(Negative(Primary(1)))
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-            AstFactor::Unary(AstUnary::Negative(inner)),
-        )))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Negative(inner),
+                )))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         assert!(matches!(*inner, AstUnary::Negative(_)));
@@ -147,9 +177,15 @@ fn test_double_negation() {
 fn test_not_false() {
     let ast = parse("!false;").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-            AstFactor::Unary(AstUnary::Not(inner)),
-        )))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Not(inner),
+                )))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         assert!(matches!(*inner, AstUnary::Primary(AstPrimary::False)));
@@ -166,8 +202,15 @@ fn test_multiplication() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Mul(
+                        _,
+                        _
+                    )))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -179,8 +222,15 @@ fn test_division() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Div(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Div(
+                        _,
+                        _
+                    )))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -191,9 +241,16 @@ fn test_chained_multiplication() {
     // 2 * 3 * 4 should be left-associative: Mul(Mul(2, 3), 4)
     let ast = parse("2 * 3 * 4;").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-            AstFactor::Mul(lhs, _rhs),
-        )))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Mul(
+                    lhs,
+                    _rhs,
+                )))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         assert!(matches!(*lhs, AstFactor::Mul(_, _)));
@@ -210,8 +267,12 @@ fn test_addition() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Add(_, _))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -223,8 +284,12 @@ fn test_subtraction() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Sub(_, _))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Sub(_, _))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -235,7 +300,13 @@ fn test_chained_addition() {
     // 1 + 2 + 3 should be left-associative: Add(Add(1, 2), 3)
     let ast = parse("1 + 2 + 3;").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Add(lhs, _rhs)))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Add(lhs, _rhs))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         assert!(matches!(*lhs, AstTerm::Add(_, _)));
@@ -252,8 +323,9 @@ fn test_less_than() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Less(_, _)
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::Comparison(AstComparison::Less(_, _)), None),
+                None
             )))
         )))
     ));
@@ -265,8 +337,12 @@ fn test_less_equal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::LessEqual(_, _)
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::LessEqual(_, _)),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -278,8 +354,9 @@ fn test_greater_than() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Greater(_, _)
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::Comparison(AstComparison::Greater(_, _)), None),
+                None
             )))
         )))
     ));
@@ -291,8 +368,12 @@ fn test_greater_equal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::GreaterEqual(_, _)
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::GreaterEqual(_, _)),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -306,7 +387,10 @@ fn test_equal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Equal(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::Equal(_, _), None),
+                None
+            )))
         )))
     ));
 }
@@ -317,7 +401,10 @@ fn test_not_equal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::NotEqual(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::NotEqual(_, _), None),
+                None
+            )))
         )))
     ));
 }
@@ -330,10 +417,14 @@ fn test_grouped_expression() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                    AstPrimary::Group(_)
-                ))))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Group(_)))
+                    ))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -344,15 +435,25 @@ fn test_grouped_addition() {
     // (1 + 2) should parse the addition inside the group
     let ast = parse("(1 + 2);").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-            AstFactor::Unary(AstUnary::Primary(AstPrimary::Group(expr))),
-        )))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Primary(AstPrimary::Group(expr)),
+                )))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         assert!(matches!(
             *expr,
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Add(_, _))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _))),
+                    None,
+                ),
+                None,
             )))
         ));
     } else {
@@ -373,7 +474,13 @@ fn test_mul_before_add() {
     // 1 + 2 * 3 should parse as Add(1, Mul(2, 3))
     let ast = parse("1 + 2 * 3;").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
-        AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Add(lhs, rhs)))),
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Add(lhs, rhs))),
+                None,
+            ),
+            None,
+        )),
     )))) = ast
     {
         // lhs is just 1 (a Factor)
@@ -392,8 +499,15 @@ fn test_grouping_overrides_precedence() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(
-                AstComparison::Term(AstTerm::Factor(AstFactor::Mul(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Mul(
+                        _,
+                        _
+                    )))),
+                    None
+                ),
+                None
             )))
         )))
     ));
@@ -406,9 +520,125 @@ fn test_comparison_below_equality() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
-            AstExpression::Assignment(AstAssignment::Eq(AstEquality::Equal(_, _)))
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::Equal(_, _), None),
+                None
+            )))
         )))
     ));
+}
+
+// === Logical Operators ===
+
+#[test]
+fn test_logic_or() {
+    let ast = parse("a or b;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(_, Some(_))))
+        )))
+    ));
+}
+
+#[test]
+fn test_logic_and() {
+    let ast = parse("a and b;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(_, Some(_)),
+                None,
+            )))
+        )))
+    ));
+}
+
+#[test]
+fn test_chained_or() {
+    // a or b or c → Or(<a>, Some(Or(<b>, Some(Or(<c>, None)))))
+    let ast = parse("a or b or c;").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(_, Some(tail))),
+    )))) = ast
+    {
+        assert!(matches!(*tail, AstLogicOr::Or(_, Some(_))));
+    } else {
+        panic!("expected chained Or");
+    }
+}
+
+#[test]
+fn test_chained_and() {
+    // a and b and c → And(<a>, Some(And(<b>, Some(And(<c>, None)))))
+    let ast = parse("a and b and c;").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(_, Some(tail)), None)),
+    )))) = ast
+    {
+        assert!(matches!(*tail, AstLogicAnd::And(_, Some(_))));
+    } else {
+        panic!("expected chained And");
+    }
+}
+
+#[test]
+fn test_and_binds_tighter_than_or() {
+    // a or b and c → Or(And(<a>, None), Some(Or(And(<b>, Some(And(<c>, None))), None)))
+    let ast = parse("a or b and c;").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(_, None), Some(tail))),
+    )))) = ast
+    {
+        // The tail's head should be an And with a tail (b and c)
+        if let AstLogicOr::Or(AstLogicAnd::And(_, Some(_)), None) = *tail {
+            // good — `and` grouped `b` and `c` together
+        } else {
+            panic!("expected And(b, Some(And(c, None))) in tail");
+        }
+    } else {
+        panic!("expected Or at top level");
+    }
+}
+
+#[test]
+fn test_equality_below_and() {
+    // 1 == 1 and 2 → And(Equal(1, 1), Some(And(<2>, None)))
+    let ast = parse("1 == 1 and 2;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
+            AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(AstEquality::Equal(_, _), Some(_)),
+                None,
+            )))
+        )))
+    ));
+}
+
+#[test]
+fn test_assignment_with_or() {
+    // x = a or b → Assign("x", LogicOr(Or(_, Some(_))))
+    let ast = parse("x = a or b;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(
+            AstExpression::Assignment(AstAssignment::Assign(_, _))
+        )))
+    ));
+    // Verify the RHS is an Or
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::Assign(_, rhs),
+    )))) = ast
+    {
+        assert!(matches!(
+            *rhs,
+            AstAssignment::LogicOr(AstLogicOr::Or(_, Some(_)))
+        ));
+    } else {
+        panic!("expected Assign");
+    }
 }
 
 // === Malformed Expressions ===

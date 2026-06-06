@@ -23,9 +23,13 @@ fn test_print_statement() {
 fn test_print_expression() {
     let ast = parse("print 1 + 2;").unwrap();
     if let Ast::Declare(AstDeclaration::Statement(AstStatement::Print(
-        AstExpression::Assignment(AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(
-            AstTerm::Add(_, _),
-        )))),
+        AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _))),
+                None,
+            ),
+            None,
+        ))),
     ))) = ast
     {
         // ok
@@ -58,10 +62,13 @@ fn test_assignment_rhs_expression() {
         assert_eq!(name, "x");
         assert!(matches!(
             *rhs,
-            AstAssignment::Eq(AstEquality::Comparison(AstComparison::Term(AstTerm::Add(
-                _,
-                _
-            ))))
+            AstAssignment::LogicOr(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _))),
+                    None,
+                ),
+                None,
+            ))
         ));
     } else {
         panic!("expected assignment");

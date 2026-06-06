@@ -25,12 +25,14 @@ pub enum LoxError {
 use lox_parser::{
     self,
     Ast::Declare,
-    AstAssignment::{Assign, Eq},
+    AstAssignment::{Assign, LogicOr},
     AstComparison::{Greater, GreaterEqual, Less, LessEqual, Term},
     AstDeclaration::{Statement, VarDeclare},
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Assignment,
     AstFactor::{Div, Mul, Unary},
+    AstLogicAnd::And,
+    AstLogicOr::Or,
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
     AstStatement::{Block, Expr, If, Print},
     AstTerm::{Add, Factor, Sub},
@@ -245,6 +247,52 @@ fn eval_equality<W: std::io::Write>(
     }
 }
 
+/// Evaluate a logical `and` expression with short-circuit semantics.
+///
+/// Returns the first falsey operand (without evaluating the rest), or
+/// the last operand if all are truthy.
+///
+/// Reference: <https://craftinginterpreters.com/control-flow.html#logical-operators>
+fn eval_logic_and<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstLogicAnd,
+) -> Result<Value, LoxError> {
+    match ast {
+        And(equality, None) => eval_equality(interpreter, equality),
+        And(equality, Some(tail)) => {
+            let left = eval_equality(interpreter, equality)?;
+            if bool::from(left.clone()) {
+                eval_logic_and(interpreter, *tail)
+            } else {
+                Ok(left)
+            }
+        }
+    }
+}
+
+/// Evaluate a logical `or` expression with short-circuit semantics.
+///
+/// Returns the first truthy operand (without evaluating the rest), or
+/// the last operand if all are falsey.
+///
+/// Reference: <https://craftinginterpreters.com/control-flow.html#logical-operators>
+fn eval_logic_or<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: lox_parser::AstLogicOr,
+) -> Result<Value, LoxError> {
+    match ast {
+        Or(head, None) => eval_logic_and(interpreter, head),
+        Or(head, Some(tail)) => {
+            let left = eval_logic_and(interpreter, head)?;
+            if bool::from(left.clone()) {
+                Ok(left)
+            } else {
+                eval_logic_or(interpreter, *tail)
+            }
+        }
+    }
+}
+
 fn eval_assignment<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     ast: lox_parser::AstAssignment,
@@ -255,7 +303,7 @@ fn eval_assignment<W: std::io::Write>(
             interpreter.env.update(&identifier, value.clone())?;
             Ok(value)
         }
-        Eq(eq) => eval_equality(interpreter, eq),
+        LogicOr(logic_or) => eval_logic_or(interpreter, logic_or),
     }
 }
 

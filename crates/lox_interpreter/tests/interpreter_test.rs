@@ -581,3 +581,86 @@ fn test_print_to_broken_writer_is_error_not_panic() {
     let result = run("print 1;", &interpreter);
     assert!(matches!(result, Err(LoxError::Io(_))));
 }
+
+// === Logical Operators ===
+
+// --- Operand-value return ---
+
+#[test]
+fn test_or_returns_first_truthy() {
+    assert_eq!(interpret("1 or 2;").unwrap(), Value::Number(1.0));
+}
+
+#[test]
+fn test_or_returns_last_when_all_falsey() {
+    assert_eq!(interpret("false or nil;").unwrap(), Value::Nil);
+}
+
+#[test]
+fn test_or_returns_truthy_after_falsey() {
+    assert_eq!(
+        interpret("nil or \"x\";").unwrap(),
+        Value::Str("x".to_string())
+    );
+}
+
+#[test]
+fn test_and_returns_first_falsey() {
+    assert_eq!(interpret("nil and 1;").unwrap(), Value::Nil);
+}
+
+#[test]
+fn test_and_returns_last_when_all_truthy() {
+    assert_eq!(interpret("1 and 2;").unwrap(), Value::Number(2.0));
+}
+
+// --- Short-circuit via assignment side effects ---
+
+#[test]
+fn test_or_short_circuits_on_truthy() {
+    // true or (x = 1) should NOT evaluate the rhs
+    let result = interpret("var x = 0; true or (x = 1); x;").unwrap();
+    assert_eq!(result, Value::Number(0.0));
+}
+
+#[test]
+fn test_or_evaluates_rhs_on_falsey() {
+    let result = interpret("var z = 0; false or (z = 1); z;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_and_short_circuits_on_falsey() {
+    // false and (y = 1) should NOT evaluate the rhs
+    let result = interpret("var y = 0; false and (y = 1); y;").unwrap();
+    assert_eq!(result, Value::Number(0.0));
+}
+
+#[test]
+fn test_and_evaluates_rhs_on_truthy() {
+    let result = interpret("var w = 0; true and (w = 1); w;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+// --- Short-circuit avoids errors ---
+
+#[test]
+fn test_or_short_circuit_avoids_error() {
+    // The rhs would error (nil < 1), but it's never evaluated
+    assert!(interpret("true or (nil < 1);").is_ok());
+}
+
+#[test]
+fn test_and_short_circuit_avoids_error() {
+    // The rhs would error (nil < 1), but it's never evaluated
+    assert!(interpret("false and (nil < 1);").is_ok());
+}
+
+// --- Precedence ---
+
+#[test]
+fn test_or_in_assignment() {
+    // a = false or 5  ⟹  a = (false or 5)  ⟹  a = 5
+    let result = interpret("var a = true; a = false or 5; a;").unwrap();
+    assert_eq!(result, Value::Number(5.0));
+}

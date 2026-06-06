@@ -43,9 +43,17 @@ pub enum AstEquality {
     NotEqual(Box<AstEquality>, AstComparison),
 }
 
+pub enum AstLogicAnd {
+    And(AstEquality, Option<Box<AstLogicAnd>>),
+}
+
+pub enum AstLogicOr {
+    Or(AstLogicAnd, Option<Box<AstLogicOr>>),
+}
+
 pub enum AstAssignment {
     Assign(AstIdentifier, Box<AstAssignment>),
-    Eq(AstEquality),
+    LogicOr(AstLogicOr),
 }
 
 pub enum AstExpression {
@@ -256,17 +264,49 @@ where
     Some(lhs)
 }
 
+fn parse_logic_and<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstLogicAnd>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let equality = parse_equality(head, p)?;
+    let tail = if p.tokens.next_if_eq(&lox_lexer::Token::And).is_some() {
+        Some(Box::new(parse_logic_and(p.tokens.next()?, p)?))
+    } else {
+        None
+    };
+    Some(AstLogicAnd::And(equality, tail))
+}
+
+fn parse_logic_or<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstLogicOr>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let logic_and = parse_logic_and(head, p)?;
+    let tail = if p.tokens.next_if_eq(&lox_lexer::Token::Or).is_some() {
+        Some(Box::new(parse_logic_or(p.tokens.next()?, p)?))
+    } else {
+        None
+    };
+    Some(AstLogicOr::Or(logic_and, tail))
+}
+
 /// See https://craftinginterpreters.com/statements-and-state.html#assignment-syntax
 fn parse_assignment<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstAssignment>
 where
     I: Iterator<Item = lox_lexer::Token>,
 {
-    let eq = parse_equality(head, p);
+    let logic_or = parse_logic_or(head, p);
     if let Some(_unused) = p.tokens.next_if_eq(&lox_lexer::Token::Equal) {
-        match eq {
-            Some(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                AstFactor::Unary(AstUnary::Primary(AstPrimary::Id(identifier))),
-            )))) => {
+        match logic_or {
+            Some(AstLogicOr::Or(
+                AstLogicAnd::And(
+                    AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
+                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Id(identifier))),
+                    ))),
+                    None,
+                ),
+                None,
+            )) => {
                 let value = parse_assignment(p.tokens.next()?, p)?;
                 Some(AstAssignment::Assign(identifier, Box::new(value)))
             }
@@ -275,7 +315,7 @@ where
             _ => None,
         }
     } else {
-        Some(AstAssignment::Eq(eq?))
+        Some(AstAssignment::LogicOr(logic_or?))
     }
 }
 
