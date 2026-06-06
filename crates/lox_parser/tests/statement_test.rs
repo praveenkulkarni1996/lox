@@ -202,3 +202,41 @@ fn test_if_missing_body_is_error() {
     let result = parse("if (true)");
     assert!(result.is_none());
 }
+
+// === While Statements ===
+
+#[test]
+fn test_while_loop() {
+    let ast = parse("while (true) print 1;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::While(
+            _,
+            ref body
+        ))) if matches!(**body, AstStatement::Print(_))
+    ));
+}
+
+#[test]
+fn test_while_block_body() {
+    let ast = parse("while (x) { print x; }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::While(
+            _,
+            ref body
+        ))) if matches!(**body, AstStatement::Block(_))
+    ));
+}
+
+#[test]
+fn test_while_missing_open_paren_is_error() {
+    let result = parse("while true) print 1;");
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_while_missing_body_is_error() {
+    let result = parse("while (true)");
+    assert!(result.is_none());
+}

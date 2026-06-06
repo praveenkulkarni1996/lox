@@ -34,7 +34,7 @@ use lox_parser::{
     AstLogicAnd::And,
     AstLogicOr::Or,
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
-    AstStatement::{Block, Expr, If, Print},
+    AstStatement::{Block, Expr, If, Print, While},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not, Primary},
 };
@@ -339,6 +339,23 @@ fn eval_if<W: std::io::Write>(
     }
 }
 
+/// Evaluate a `while` loop.
+///
+/// Repeatedly evaluates the condition; while truthy, evaluates the body and
+/// discards its value. Returns `Value::Nil` when the condition becomes falsey.
+///
+/// Reference: <https://craftinginterpreters.com/control-flow.html#while-loops>
+fn eval_while<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    condition: &lox_parser::AstExpression,
+    body: &lox_parser::AstStatement,
+) -> Result<Value, LoxError> {
+    while bool::from(eval_expression(interpreter, condition)?) {
+        eval_statement(interpreter, body)?;
+    }
+    Ok(Value::Nil)
+}
+
 fn eval_statement<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     ast: &lox_parser::AstStatement,
@@ -352,6 +369,7 @@ fn eval_statement<W: std::io::Write>(
         }
         Block(decls) => eval_block(interpreter, decls),
         If(cond, then_branch, else_branch) => eval_if(interpreter, cond, then_branch, else_branch),
+        While(condition, body) => eval_while(interpreter, condition, body),
     }
 }
 

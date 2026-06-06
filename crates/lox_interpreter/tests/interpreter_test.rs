@@ -664,3 +664,45 @@ fn test_or_in_assignment() {
     let result = interpret("var a = true; a = false or 5; a;").unwrap();
     assert_eq!(result, Value::Number(5.0));
 }
+
+// === While Loops ===
+
+#[test]
+fn test_while_counter_loop() {
+    let result =
+        interpret("var i = 0; var s = 0; while (i < 3) { s = s + i; i = i + 1; } s;").unwrap();
+    assert_eq!(result, Value::Number(3.0));
+}
+
+#[test]
+fn test_while_false_from_start() {
+    let result = interpret("var x = 1; while (false) { x = 99; } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_while_single_iteration() {
+    let result = interpret("var x = 0; while (x < 1) { x = x + 1; } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+}
+
+#[test]
+fn test_while_block_scope_per_iteration() {
+    // A var declared inside the loop body is not visible after the loop.
+    let result = interpret("var x = 0; while (x < 1) { var y = 42; x = x + 1; } x;").unwrap();
+    assert_eq!(result, Value::Number(1.0));
+    assert!(interpret("var x = 0; while (x < 1) { var y = 42; x = x + 1; } y;").is_err());
+}
+
+#[test]
+fn test_while_with_print() {
+    let (result, output) = interpret_capturing("var i = 0; while (i < 3) { print i; i = i + 1; }");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "0\n1\n2\n");
+}
+
+#[test]
+fn test_while_with_logical_condition() {
+    let result = interpret("var x = 0; while (x < 5 and x < 3) { x = x + 1; } x;").unwrap();
+    assert_eq!(result, Value::Number(3.0));
+}
