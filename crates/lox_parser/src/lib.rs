@@ -2,6 +2,7 @@ use std::iter::Iterator;
 
 type AstIdentifier = String;
 
+#[derive(Debug, PartialEq)]
 pub enum AstPrimary {
     Number(f64),
     Str(String),
@@ -12,23 +13,27 @@ pub enum AstPrimary {
     Id(AstIdentifier),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstUnary {
     Primary(AstPrimary),
     Not(Box<AstUnary>),
     Negative(Box<AstUnary>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstFactor {
     Unary(AstUnary),
     Mul(Box<AstFactor>, AstUnary),
     Div(Box<AstFactor>, AstUnary),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstTerm {
     Factor(AstFactor),
     Add(Box<AstTerm>, AstFactor),
     Sub(Box<AstTerm>, AstFactor),
 }
+#[derive(Debug, PartialEq)]
 pub enum AstComparison {
     Term(AstTerm),
     GreaterEqual(Box<AstComparison>, AstTerm),
@@ -37,29 +42,35 @@ pub enum AstComparison {
     Less(Box<AstComparison>, AstTerm),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstEquality {
     Comparison(AstComparison),
     Equal(Box<AstEquality>, AstComparison),
     NotEqual(Box<AstEquality>, AstComparison),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstLogicAnd {
     And(AstEquality, Option<Box<AstLogicAnd>>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstLogicOr {
     Or(AstLogicAnd, Option<Box<AstLogicOr>>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstAssignment {
     Assign(AstIdentifier, Box<AstAssignment>),
     LogicOr(AstLogicOr),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstExpression {
     Assignment(AstAssignment),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstStatement {
     Expr(AstExpression),
     Print(AstExpression),
@@ -68,11 +79,13 @@ pub enum AstStatement {
     While(AstExpression, Box<AstStatement>),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum AstDeclaration {
     VarDeclare(AstIdentifier, AstExpression),
     Statement(AstStatement),
 }
 
+#[derive(Debug, PartialEq)]
 pub enum Ast {
     Declare(AstDeclaration),
 }
@@ -327,6 +340,114 @@ where
     Some(AstExpression::Assignment(parse_assignment(head, p)?))
 }
 
+/// Parse a `for` statement and desugar it into existing AST nodes.
+///
+/// Lox's `for` loop has no dedicated AST node. Instead, this function parses
+/// `for (init; cond; inc) body` and rewrites it as a block containing an
+/// optional initializer followed by a `while` loop:
+///
+/// ```text
+/// { init; while (cond) { body; inc; } }
+/// ```
+///
+/// This is the one place where the parser's output diverges from the source
+/// syntax — the resulting tree contains only `AstStatement::Block{}` and
+/// `AstStatement::While{}`, both of which the interpreter already handles.
+///
+/// Each of the three clauses is optional:
+/// - **Initializer**: a `var` declaration, an expression statement, or empty.
+/// - **Condition**: an expression, or empty (defaults to `true`).
+/// - **Increment**: an expression, or empty.
+///
+/// Reference: <https://craftinginterpreters.com/control-flow.html#for-loops>
+fn parse_for_and_desugar<I>(p: &mut Parser<I>) -> Option<AstStatement>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    p.tokens.next_if_eq(&lox_lexer::Token::LParens)?;
+
+    let initializer = match p.tokens.peek()? {
+        lox_lexer::Token::Semicolon => {
+            p.tokens.next();
+            None
+        }
+        lox_lexer::Token::Var => {
+            let head = p.tokens.next()?;
+            Some(parse_declaration(head, p)?)
+        }
+        _ => {
+            let head = p.tokens.next()?;
+            let expr = parse_expr(head, p)?;
+            p.tokens.next_if_eq(&lox_lexer::Token::Semicolon)?;
+            Some(AstDeclaration::Statement(AstStatement::Expr(expr)))
+        }
+    };
+
+    let condition = match p.tokens.peek()? {
+        lox_lexer::Token::Semicolon => {
+            p.tokens.next();
+            make_true_expr()
+        }
+        _ => {
+            let head = p.tokens.next()?;
+            let expr = parse_expr(head, p)?;
+            p.tokens.next_if_eq(&lox_lexer::Token::Semicolon)?;
+            expr
+        }
+    };
+
+    let increment = match p.tokens.peek()? {
+        lox_lexer::Token::RParens => {
+            p.tokens.next();
+            None
+        }
+        _ => {
+            let head = p.tokens.next()?;
+            let expr = parse_expr(head, p)?;
+            p.tokens.next_if_eq(&lox_lexer::Token::RParens)?;
+            Some(expr)
+        }
+    };
+
+    let body = parse_statement(p.tokens.next()?, p)?;
+
+    let while_body = match increment {
+        Some(inc) => AstStatement::Block(vec![
+            AstDeclaration::Statement(body),
+            AstDeclaration::Statement(AstStatement::Expr(inc)),
+        ]),
+        None => body,
+    };
+
+    let while_stmt = AstStatement::While(condition, Box::new(while_body));
+
+    let mut decls = Vec::new();
+    if let Some(init) = initializer {
+        decls.push(init);
+    }
+    decls.push(AstDeclaration::Statement(while_stmt));
+    Some(AstStatement::Block(decls))
+}
+
+/// Build a synthetic `true` expression for omitted `for`-loop conditions.
+///
+/// The condition clause of a `for` statement is optional; when absent, the loop
+/// runs unconditionally. This helper constructs the full `AstExpression{}` chain
+/// for the literal `true`, threading it through every precedence layer.
+///
+/// Reference: <https://craftinginterpreters.com/control-flow.html#for-loops>
+fn make_true_expr() -> AstExpression {
+    AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+        AstLogicAnd::And(
+            AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                AstUnary::Primary(AstPrimary::True),
+            )))),
+            None,
+        ),
+        None,
+    )))
+}
+
 fn parse_statement<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstStatement>
 where
     I: Iterator<Item = lox_lexer::Token>,
@@ -373,6 +494,7 @@ where
             let body = parse_statement(p.tokens.next()?, p)?;
             Some(AstStatement::While(condition, Box::new(body)))
         }
+        lox_lexer::Token::For => parse_for_and_desugar(p),
         _ => {
             let expr = parse_expr(head, p)?;
             match p.tokens.next()? {

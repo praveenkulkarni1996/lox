@@ -240,3 +240,53 @@ fn test_while_missing_body_is_error() {
     let result = parse("while (true)");
     assert!(result.is_none());
 }
+
+// === For Statements (desugared to Block + While) ===
+
+#[test]
+fn test_for_loop() {
+    let for_ast = parse("for (var i = 0; i < 3; i = i + 1) print i;").unwrap();
+    let while_ast = parse("{ var i = 0; while (i < 3) { print i; i = i + 1; } }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_empty_initializer() {
+    let for_ast = parse("for (; x < 3; x = x + 1) print x;").unwrap();
+    let while_ast = parse("{ while (x < 3) { print x; x = x + 1; } }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_empty_condition() {
+    let for_ast = parse("for (var i = 0;; i = i + 1) print i;").unwrap();
+    let while_ast = parse("{ var i = 0; while (true) { print i; i = i + 1; } }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_empty_increment() {
+    let for_ast = parse("for (var i = 0; i < 3;) print i;").unwrap();
+    let while_ast = parse("{ var i = 0; while (i < 3) print i; }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_all_empty() {
+    let for_ast = parse("for (;;) print 1;").unwrap();
+    let while_ast = parse("{ while (true) print 1; }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_expression_initializer() {
+    let for_ast = parse("for (i = 0; i < 3; i = i + 1) print i;").unwrap();
+    let while_ast = parse("{ i = 0; while (i < 3) { print i; i = i + 1; } }").unwrap();
+    assert_eq!(for_ast, while_ast);
+}
+
+#[test]
+fn test_for_missing_open_paren_is_error() {
+    let result = parse("for var i = 0; i < 3; i = i + 1) print i;");
+    assert!(result.is_none());
+}

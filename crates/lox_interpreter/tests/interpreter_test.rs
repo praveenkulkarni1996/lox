@@ -706,3 +706,56 @@ fn test_while_with_logical_condition() {
     let result = interpret("var x = 0; while (x < 5 and x < 3) { x = x + 1; } x;").unwrap();
     assert_eq!(result, Value::Number(3.0));
 }
+
+// === For Loops ===
+
+#[test]
+fn test_for_classic_counter() {
+    let result = interpret("var s = 0; for (var i = 0; i < 4; i = i + 1) s = s + i; s;").unwrap();
+    assert_eq!(result, Value::Number(6.0));
+}
+
+#[test]
+fn test_for_loop_var_scoped() {
+    // The loop variable is scoped to the for block; accessing it after is an error.
+    let result = interpret("for (var i = 0; i < 1; i = i + 1) i; i;");
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_for_expression_initializer() {
+    let result =
+        interpret("var i = 0; var s = 0; for (i = 1; i < 4; i = i + 1) s = s + i; s;").unwrap();
+    assert_eq!(result, Value::Number(6.0));
+}
+
+#[test]
+fn test_for_empty_initializer() {
+    let result = interpret("var i = 0; for (; i < 3; i = i + 1) i; i;").unwrap();
+    assert_eq!(result, Value::Number(3.0));
+}
+
+#[test]
+fn test_for_empty_increment() {
+    let result = interpret("var i = 0; for (; i < 3;) { i = i + 1; } i;").unwrap();
+    assert_eq!(result, Value::Number(3.0));
+}
+
+#[test]
+fn test_for_with_print() {
+    let (result, output) = interpret_capturing("for (var i = 0; i < 3; i = i + 1) print i;");
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "0\n1\n2\n");
+}
+
+#[test]
+fn test_for_fibonacci() {
+    let (result, output) = interpret_capturing(
+        "var a = 0; var temp = 0; for (var b = 1; a < 10000; b = temp + b) { print a; temp = a; a = b; }",
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(
+        output,
+        "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n6765\n"
+    );
+}
