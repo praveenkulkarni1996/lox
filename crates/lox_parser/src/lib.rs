@@ -85,6 +85,7 @@ pub enum AstStatement {
     Block(Vec<AstDeclaration>),
     If(AstExpression, Box<AstStatement>, Option<Box<AstStatement>>),
     While(AstExpression, Box<AstStatement>),
+    Return(Option<AstExpression>),
 }
 
 #[derive(Debug, PartialEq)]
@@ -583,6 +584,19 @@ where
             p.tokens.next_if_eq(&lox_lexer::Token::RParens)?;
             let body = parse_statement(p.tokens.next()?, p)?;
             Some(AstStatement::While(condition, Box::new(body)))
+        }
+        lox_lexer::Token::Return => {
+            let value = match p.tokens.peek() {
+                Some(lox_lexer::Token::Semicolon) => None,
+                _ => {
+                    let head = p.tokens.next()?;
+                    Some(parse_expr(head, p)?)
+                }
+            };
+            match p.tokens.next()? {
+                lox_lexer::Token::Semicolon => Some(AstStatement::Return(value)),
+                _ => None,
+            }
         }
         lox_lexer::Token::For => parse_for_and_desugar(p),
         _ => {

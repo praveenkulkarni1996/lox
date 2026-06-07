@@ -338,6 +338,62 @@ fn test_fun_too_many_params_is_error() {
     assert!(parse(&format!("fun f({params}) {{}}")).is_some());
 }
 
+// === Return Statements ===
+
+#[test]
+fn test_return_bare() {
+    let ast = parse("return;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Return(None)))
+    ));
+}
+
+#[test]
+fn test_return_with_value() {
+    let ast = parse("return 42;").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Return(Some(_))))
+    ));
+}
+
+#[test]
+fn test_return_expression() {
+    // return value can be a full expression (e.g. addition)
+    let ast = parse("return 1 + 2;").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Return(Some(
+        AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Add(_, _))),
+                None,
+            ),
+            None,
+        ))),
+    )))) = ast
+    {
+        // ok
+    } else {
+        panic!("expected Return(Some(Add(...)))");
+    }
+}
+
+#[test]
+fn test_return_in_block() {
+    let ast = parse("{ return 1; }").unwrap();
+    assert!(matches!(
+        ast,
+        Ast::Declare(AstDeclaration::Statement(AstStatement::Block(ref decls)))
+            if matches!(decls[0], AstDeclaration::Statement(AstStatement::Return(_)))
+    ));
+}
+
+#[test]
+fn test_return_missing_semicolon_is_error() {
+    let result = parse("return 42");
+    assert!(result.is_none());
+}
+
 // === Eager whole-program parsing ===
 
 #[test]

@@ -24,6 +24,9 @@ pub enum LoxError {
     #[error("Expected {expected} arguments but got {got}.")]
     ArityMismatch { expected: usize, got: usize },
 
+    #[error("Can't return from top-level code.")]
+    Return(Value),
+
     #[error("I/O error while writing output: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -40,7 +43,7 @@ use lox_parser::{
     AstLogicAnd::And,
     AstLogicOr::Or,
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
-    AstStatement::{Block, Expr, If, Print, While},
+    AstStatement::{Block, Expr, If, Print, Return, While},
     AstTerm::{Add, Factor, Sub},
     AstUnary::{Negative, Not},
 };
@@ -346,7 +349,10 @@ fn eval_call<W: std::io::Write>(
 ///
 /// Runs the body in a fresh environment that is a child of the function's
 /// *closure* (not the call site), with the parameters bound to the arguments.
-/// Returns `Value::Nil` — explicit `return` is added in a later chapter (#17).
+/// An explicit `return expr;` (or bare `return;`, which yields nil) causes the
+/// call to produce that value immediately, short-circuiting the rest of the body.
+/// The `LoxError::Return` signal is caught here and turned into a normal `Value`
+/// result; it must never leak out of a function call to the user.
 ///
 /// Reference: <https://craftinginterpreters.com/functions.html#function-objects>
 fn call_function<W: std::io::Write>(
@@ -363,7 +369,11 @@ fn call_function<W: std::io::Write>(
         env,
     };
     for decl in function.body.iter() {
-        eval_declaration(&call_interpreter, decl)?;
+        match eval_declaration(&call_interpreter, decl) {
+            Ok(_) => {}
+            Err(LoxError::Return(value)) => return Ok(value),
+            Err(e) => return Err(e),
+        }
     }
     Ok(Value::Nil)
 }
@@ -580,6 +590,13 @@ fn eval_statement<W: std::io::Write>(
         Block(decls) => eval_block(interpreter, decls),
         If(cond, then_branch, else_branch) => eval_if(interpreter, cond, then_branch, else_branch),
         While(condition, body) => eval_while(interpreter, condition, body),
+        Return(expr_opt) => {
+            let value = match expr_opt {
+                Some(e) => eval_expression(interpreter, e)?,
+                None => Value::Nil,
+            };
+            Err(LoxError::Return(value))
+        }
     }
 }
 

@@ -838,7 +838,7 @@ fn test_function_implicit_nil_return() {
 
 #[test]
 fn test_function_recursion_via_side_effects() {
-    // No `return` yet (that is issue #17), so recursion is observed via prints.
+    // Recursion observed via prints (return is also available but this test demonstrates side effects).
     let (result, output) = interpret_capturing(
         r#"
         fun count(n) {
@@ -919,8 +919,7 @@ fn test_function_persists_across_separate_runs() {
 fn test_closure_persists_across_separate_runs() {
     // A closure created in one run() still sees its captured scope when invoked
     // from a later run() — its borrowed body and captured environment both
-    // outlive the first parse. (`return` is not available until #17, so the
-    // inner closure is exposed by assigning it to a global.)
+    // outlive the first parse. (The inner closure is exposed by assigning it to a global.)
     let interpreter = Interpreter::new(Vec::new());
     run(
         r#"
@@ -938,4 +937,117 @@ fn test_closure_persists_across_separate_runs() {
     run("saved();", &interpreter).unwrap();
     let output = String::from_utf8(interpreter.out.borrow().clone()).unwrap();
     assert_eq!(output, "7\n");
+}
+
+// === Return Statements (issue #17) ===
+
+#[test]
+fn test_function_return_value() {
+    let result = interpret(
+        r#"
+        fun f() { return 42; }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Number(42.0));
+}
+
+#[test]
+fn test_function_bare_return_is_nil() {
+    let result = interpret(
+        r#"
+        fun f() { return; }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+}
+
+#[test]
+fn test_function_early_return_short_circuits() {
+    // Code after return must not execute (no output, no side effects).
+    let (result, output) = interpret_capturing(
+        r#"
+        fun f() {
+            print 1;
+            return;
+            print 2;
+        }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "1\n");
+}
+
+#[test]
+fn test_function_return_value_mid_body() {
+    let result = interpret(
+        r#"
+        fun f() {
+            var x = 1;
+            x = x + 1;
+            return x + 40;
+            print "unreached";
+        }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Number(42.0));
+}
+
+#[test]
+fn test_return_unwinds_nested_blocks_and_loops() {
+    // return deep inside block + while must propagate the value and skip outer code.
+    let result = interpret(
+        r#"
+        fun f() {
+            var i = 0;
+            while (i < 10) {
+                if (i == 3) {
+                    { return 99; }
+                }
+                i = i + 1;
+            }
+            return 0;
+        }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Number(99.0));
+}
+
+#[test]
+fn test_return_inside_for_loop() {
+    // for is desugared to block+while; return must still work.
+    let result = interpret(
+        r#"
+        fun find() {
+            for (var i = 0; i < 5; i = i + 1) {
+                if (i == 2) return i;
+            }
+            return -1;
+        }
+        find();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Number(2.0));
+}
+
+#[test]
+fn test_function_fibonacci_recursion_with_return() {
+    // The classic recursive Fibonacci example from Crafting Interpreters §10.5.
+    // Exercises early returns (base case), return of a computed expression involving
+    // recursive calls, and correct unwinding through the call stack.
+    let result = interpret(
+        r#"
+        fun fib(n) {
+            if (n <= 1) return n;
+            return fib(n - 2) + fib(n - 1);
+        }
+        fib(20);
+        "#,
+    );
+    // fib(20) == 6765 (ties to the sequence in test_for_fibonacci)
+    assert_eq!(result.unwrap(), Value::Number(6765.0));
 }
