@@ -900,3 +900,42 @@ fn test_function_closure_captures_enclosing_scope() {
     assert_eq!(result.unwrap(), Value::Nil);
     assert_eq!(output, "10\n");
 }
+
+// === Cross-run persistence (eager parse + borrowed AST, issue #20) ===
+
+#[test]
+fn test_function_persists_across_separate_runs() {
+    // A function defined in one run() call must remain callable in a later call
+    // on the same interpreter (the REPL case): its borrowed body outlives the
+    // first parse because the program is leaked to 'static.
+    let interpreter = Interpreter::new(Vec::new());
+    run("fun greet() { print 42; }", &interpreter).unwrap();
+    run("greet();", &interpreter).unwrap();
+    let output = String::from_utf8(interpreter.out.borrow().clone()).unwrap();
+    assert_eq!(output, "42\n");
+}
+
+#[test]
+fn test_closure_persists_across_separate_runs() {
+    // A closure created in one run() still sees its captured scope when invoked
+    // from a later run() — its borrowed body and captured environment both
+    // outlive the first parse. (`return` is not available until #17, so the
+    // inner closure is exposed by assigning it to a global.)
+    let interpreter = Interpreter::new(Vec::new());
+    run(
+        r#"
+        var saved = nil;
+        fun make() {
+            var x = 7;
+            fun inner() { print x; }
+            saved = inner;
+        }
+        make();
+        "#,
+        &interpreter,
+    )
+    .unwrap();
+    run("saved();", &interpreter).unwrap();
+    let output = String::from_utf8(interpreter.out.borrow().clone()).unwrap();
+    assert_eq!(output, "7\n");
+}

@@ -1,5 +1,4 @@
 use std::iter::Iterator;
-use std::rc::Rc;
 
 type AstIdentifier = String;
 
@@ -91,13 +90,13 @@ pub enum AstStatement {
 #[derive(Debug, PartialEq)]
 pub enum AstDeclaration {
     VarDeclare(AstIdentifier, AstExpression),
-    /// A function declaration: `fun name(params) { body }`. The body is shared
-    /// via `Rc` so a runtime function value can own it independently of the
-    /// parse tree it came from (the interpreter only reads it).
+    /// A function declaration: `fun name(params) { body }`. The body is a plain
+    /// owned `Vec`; a runtime function value borrows it directly from the (leaked,
+    /// `'static`) parse tree rather than owning a copy.
     FunDeclare {
         name: AstIdentifier,
         params: Vec<AstIdentifier>,
-        body: Rc<Vec<AstDeclaration>>,
+        body: Vec<AstDeclaration>,
     },
     Statement(AstStatement),
 }
@@ -632,11 +631,7 @@ where
             }
             p.tokens.next_if_eq(&lox_lexer::Token::LBrace)?;
             let body = parse_block_decls(p)?;
-            Some(AstDeclaration::FunDeclare {
-                name,
-                params,
-                body: Rc::new(body),
-            })
+            Some(AstDeclaration::FunDeclare { name, params, body })
         }
         lox_lexer::Token::Var => {
             let identifier: AstIdentifier = parse_id(p.tokens.next()?)?;

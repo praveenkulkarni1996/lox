@@ -45,9 +45,6 @@ use lox_parser::{
     AstUnary::{Negative, Not},
 };
 
-use lox_lexer::Lexer;
-use lox_parser::Parser;
-
 /// A runtime value produced by evaluating a Lox expression.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Value {
@@ -109,17 +106,13 @@ pub struct LoxFunction {
     /// environment (the key there, not this field), and function equality is
     /// reference identity (`Rc::ptr_eq`, see `Callable`'s `PartialEq`) — neither
     /// path reads `name`. Renaming or rebinding the value cannot change it.
-    name: String,
+    name: &'static str,
     /// Parameter names, bound to argument values on each call. Its length is the
     /// function's arity.
-    params: Vec<String>,
-    /// The body, shared from the parse tree via `Rc` so the value can outlive the
-    /// parse loop and be called repeatedly.
-    ///
-    /// TODO(#20): replace this shared ownership with a borrowed slice once the
-    /// EagerParser redesign lets a single owned AST outlive the interpreter; the
-    /// `Rc` here also forms a leak-prone cycle (env → function → closure env).
-    body: Rc<Vec<lox_parser::AstDeclaration>>,
+    params: &'static [String],
+    /// The body, borrowed directly from the leaked (`'static`) parse tree, so the
+    /// value can outlive the parse loop and be called repeatedly with no copy.
+    body: &'static [lox_parser::AstDeclaration],
     /// The environment captured at declaration time (the function's closure).
     closure: Rc<Environment>,
 }
@@ -532,7 +525,7 @@ fn eval_expression<W: std::io::Write>(
 
 fn eval_block<W: std::io::Write>(
     interpreter: &Interpreter<W>,
-    decls: &[lox_parser::AstDeclaration],
+    decls: &'static [lox_parser::AstDeclaration],
 ) -> Result<Value, LoxError> {
     let child = interpreter.child();
     for decl in decls {
@@ -544,8 +537,8 @@ fn eval_block<W: std::io::Write>(
 fn eval_if<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     condition: &lox_parser::AstExpression,
-    then_branch: &lox_parser::AstStatement,
-    else_branch: &Option<Box<lox_parser::AstStatement>>,
+    then_branch: &'static lox_parser::AstStatement,
+    else_branch: &'static Option<Box<lox_parser::AstStatement>>,
 ) -> Result<Value, LoxError> {
     if bool::from(eval_expression(interpreter, condition)?) {
         eval_statement(interpreter, then_branch)
@@ -565,7 +558,7 @@ fn eval_if<W: std::io::Write>(
 fn eval_while<W: std::io::Write>(
     interpreter: &Interpreter<W>,
     condition: &lox_parser::AstExpression,
-    body: &lox_parser::AstStatement,
+    body: &'static lox_parser::AstStatement,
 ) -> Result<Value, LoxError> {
     while bool::from(eval_expression(interpreter, condition)?) {
         eval_statement(interpreter, body)?;
@@ -575,7 +568,7 @@ fn eval_while<W: std::io::Write>(
 
 fn eval_statement<W: std::io::Write>(
     interpreter: &Interpreter<W>,
-    ast: &lox_parser::AstStatement,
+    ast: &'static lox_parser::AstStatement,
 ) -> Result<Value, LoxError> {
     match ast {
         Expr(expr) => eval_expression(interpreter, expr),
@@ -592,7 +585,7 @@ fn eval_statement<W: std::io::Write>(
 
 fn eval_declaration<W: std::io::Write>(
     interpreter: &Interpreter<W>,
-    ast: &lox_parser::AstDeclaration,
+    ast: &'static lox_parser::AstDeclaration,
 ) -> Result<Value, LoxError> {
     match ast {
         VarDeclare(name, expr) => {
@@ -602,9 +595,11 @@ fn eval_declaration<W: std::io::Write>(
         }
         FunDeclare { name, params, body } => {
             let function = LoxFunction {
-                name: name.clone(),
-                params: params.clone(),
-                body: Rc::clone(body),
+                // `ast` is `&'static`, so these borrow straight into the leaked
+                // parse tree — no copies of the name, params, or body.
+                name: name.as_str(),
+                params: params.as_slice(),
+                body: body.as_slice(),
                 // Capture the defining environment as the closure. Declaring the
                 // name into this same environment (below) is what lets the body
                 // — which runs in a child of the closure — call itself.
@@ -621,7 +616,7 @@ fn eval_declaration<W: std::io::Write>(
 
 pub fn eval<W: std::io::Write>(
     interpreter: &Interpreter<W>,
-    ast: &lox_parser::Ast,
+    ast: &'static lox_parser::Ast,
 ) -> Result<Value, LoxError> {
     match ast {
         Declare(decl) => eval_declaration(interpreter, decl),
@@ -633,7 +628,13 @@ pub fn eval<W: std::io::Write>(
 ///
 /// The interpreter is borrowed rather than owned so that callers can reuse it
 /// across multiple `run` calls — this is what lets the REPL persist variables
-/// between lines, and lets tests inspect a captured writer afterwards.
+/// (and functions) between lines, and lets tests inspect a captured writer
+/// afterwards.
+///
+/// The parsed program is **leaked** to `'static` so that runtime values (such as
+/// functions) may borrow into it and outlive this call — which is exactly what
+/// makes cross-line persistence sound. Each call leaks its own program; for a
+/// CLI/REPL that is a bounded, process-lifetime cost.
 ///
 /// # Examples
 ///
@@ -647,13 +648,28 @@ pub fn run<W: std::io::Write>(
     source: &str,
     interpreter: &Interpreter<W>,
 ) -> Result<Value, LoxError> {
-    let parser = Parser::new(Lexer::new(source.chars()));
+    // Leak the parsed program so the AST is `'static` and values may borrow it.
+    let program: &'static [lox_parser::Ast] =
+        Box::leak(lox_parser::parse_program(source).into_boxed_slice());
+    run_program(program, interpreter)
+}
+
+/// Evaluate an already-parsed program, returning the value of its last
+/// declaration (or the first error).
+///
+/// The program must outlive every value it produces (functions borrow into it),
+/// which is why it is `&'static`. [`run`] is the convenience that parses, leaks,
+/// and calls this.
+pub fn run_program<W: std::io::Write>(
+    program: &'static [lox_parser::Ast],
+    interpreter: &Interpreter<W>,
+) -> Result<Value, LoxError> {
     let mut result = Value::Nil;
-    // NOTE: parse errors currently truncate silently — the Parser iterator
-    // yields None for both clean EOF and a parse failure. Surfacing them is
+    // NOTE: parse errors currently truncate silently — `parse_program` stops at
+    // the first `None` for both clean EOF and a parse failure. Surfacing them is
     // tracked in issue #5.
-    for ast in parser {
-        result = eval(interpreter, &ast)?;
+    for ast in program {
+        result = eval(interpreter, ast)?;
     }
     Ok(result)
 }
