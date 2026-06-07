@@ -1,4 +1,5 @@
 use std::iter::Iterator;
+use std::rc::Rc;
 
 type AstIdentifier = String;
 
@@ -90,6 +91,14 @@ pub enum AstStatement {
 #[derive(Debug, PartialEq)]
 pub enum AstDeclaration {
     VarDeclare(AstIdentifier, AstExpression),
+    /// A function declaration: `fun name(params) { body }`. The body is shared
+    /// via `Rc` so a runtime function value can own it independently of the
+    /// parse tree it came from (the interpreter only reads it).
+    FunDeclare {
+        name: AstIdentifier,
+        params: Vec<AstIdentifier>,
+        body: Rc<Vec<AstDeclaration>>,
+    },
     Statement(AstStatement),
 }
 
@@ -180,7 +189,9 @@ where
     }
 }
 
-/// Maximum number of arguments allowed in a single call, matching the book.
+/// Maximum number of arguments in a call — and, equivalently, parameters in a
+/// function declaration. The book uses the same bound for both, since arguments
+/// must match parameters.
 ///
 /// Reference: <https://craftinginterpreters.com/functions.html#maximum-argument-counts>
 const MAX_ARGUMENTS: usize = 255;
@@ -508,6 +519,24 @@ fn make_true_expr() -> AstExpression {
     )))
 }
 
+/// Parse a brace-delimited block of declarations, assuming the opening `{` is
+/// already consumed. Consumes through the closing `}`.
+fn parse_block_decls<I>(p: &mut Parser<I>) -> Option<Vec<AstDeclaration>>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let mut decls = vec![];
+    while let Some(tok) = p.tokens.peek() {
+        if tok == &lox_lexer::Token::RBrace {
+            break;
+        }
+        let head = p.tokens.next()?;
+        decls.push(parse_declaration(head, p)?);
+    }
+    p.tokens.next_if_eq(&lox_lexer::Token::RBrace)?;
+    Some(decls)
+}
+
 fn parse_statement<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstStatement>
 where
     I: Iterator<Item = lox_lexer::Token>,
@@ -520,18 +549,7 @@ where
                 _ => None,
             }
         }
-        lox_lexer::Token::LBrace => {
-            let mut decls = vec![];
-            while let Some(tok) = p.tokens.peek() {
-                if tok == &lox_lexer::Token::RBrace {
-                    break;
-                }
-                let head = p.tokens.next()?;
-                decls.push(parse_declaration(head, p)?);
-            }
-            p.tokens.next_if_eq(&lox_lexer::Token::RBrace)?;
-            Some(AstStatement::Block(decls))
-        }
+        lox_lexer::Token::LBrace => Some(AstStatement::Block(parse_block_decls(p)?)),
         lox_lexer::Token::If => {
             p.tokens.next_if_eq(&lox_lexer::Token::LParens)?;
             let condition = parse_expr(p.tokens.next()?, p)?;
@@ -565,11 +583,48 @@ where
     }
 }
 
+/// Parse a comma-separated parameter list, assuming the opening `(` is consumed.
+///
+/// Consumes through the closing `)`. The [`MAX_ARGUMENTS`] limit is enforced by
+/// the caller (`parse_declaration`); this function only parses.
+fn parse_parameters<I>(p: &mut Parser<I>) -> Option<Vec<AstIdentifier>>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let mut params = Vec::new();
+    if p.tokens.next_if_eq(&lox_lexer::Token::RParens).is_some() {
+        return Some(params);
+    }
+    loop {
+        params.push(parse_id(p.tokens.next()?)?);
+        if p.tokens.next_if_eq(&lox_lexer::Token::Comma).is_none() {
+            break;
+        }
+    }
+    p.tokens.next_if_eq(&lox_lexer::Token::RParens)?;
+    Some(params)
+}
+
 fn parse_declaration<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstDeclaration>
 where
     I: Iterator<Item = lox_lexer::Token>,
 {
     match head {
+        lox_lexer::Token::Fun => {
+            let name = parse_id(p.tokens.next()?)?;
+            p.tokens.next_if_eq(&lox_lexer::Token::LParens)?;
+            let params = parse_parameters(p)?;
+            if params.len() > MAX_ARGUMENTS {
+                return None;
+            }
+            p.tokens.next_if_eq(&lox_lexer::Token::LBrace)?;
+            let body = parse_block_decls(p)?;
+            Some(AstDeclaration::FunDeclare {
+                name,
+                params,
+                body: Rc::new(body),
+            })
+        }
         lox_lexer::Token::Var => {
             let identifier: AstIdentifier = parse_id(p.tokens.next()?)?;
             match p.tokens.next()? {

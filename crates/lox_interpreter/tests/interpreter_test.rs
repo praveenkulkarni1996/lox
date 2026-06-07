@@ -798,3 +798,105 @@ fn test_call_non_callable_variable() {
     let err = interpret("var x = 1; x();").unwrap_err();
     assert!(matches!(err, LoxError::NotCallable(_)));
 }
+
+// === Function Declarations ===
+
+#[test]
+fn test_function_define_and_call() {
+    let (result, output) = interpret_capturing(
+        r#"
+        fun f() { print 1; }
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "1\n");
+}
+
+#[test]
+fn test_function_params_bind() {
+    let (result, output) = interpret_capturing(
+        r#"
+        fun add(a, b) { print a + b; }
+        add(1, 2);
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "3\n");
+}
+
+#[test]
+fn test_function_implicit_nil_return() {
+    let result = interpret(
+        r#"
+        fun f() {}
+        f();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+}
+
+#[test]
+fn test_function_recursion_via_side_effects() {
+    // No `return` yet (that is issue #17), so recursion is observed via prints.
+    let (result, output) = interpret_capturing(
+        r#"
+        fun count(n) {
+            if (n > 0) {
+                print n;
+                count(n - 1);
+            }
+        }
+        count(3);
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "3\n2\n1\n");
+}
+
+#[test]
+fn test_function_arity_mismatch() {
+    let err = interpret(
+        r#"
+        fun f(a) {}
+        f();
+        "#,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        err,
+        LoxError::ArityMismatch {
+            expected: 1,
+            got: 0
+        }
+    ));
+}
+
+#[test]
+fn test_function_value_displays_as_fn() {
+    let (result, output) = interpret_capturing(
+        r#"
+        fun f() {}
+        print f;
+        "#,
+    );
+    assert!(result.is_ok());
+    assert_eq!(output, "<fn f>\n");
+}
+
+#[test]
+fn test_function_closure_captures_enclosing_scope() {
+    // Full closure coverage is issue #18; this checks the basic capture.
+    let (result, output) = interpret_capturing(
+        r#"
+        fun outer() {
+            var x = 10;
+            fun inner() { print x; }
+            inner();
+        }
+        outer();
+        "#,
+    );
+    assert_eq!(result.unwrap(), Value::Nil);
+    assert_eq!(output, "10\n");
+}

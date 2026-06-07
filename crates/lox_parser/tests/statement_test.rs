@@ -290,3 +290,50 @@ fn test_for_missing_open_paren_is_error() {
     let result = parse("for var i = 0; i < 3; i = i + 1) print i;");
     assert!(result.is_none());
 }
+
+// === Function Declarations ===
+
+#[test]
+fn test_fun_no_params() {
+    let ast = parse("fun f() {}").unwrap();
+    if let Ast::Declare(AstDeclaration::FunDeclare { name, params, body }) = ast {
+        assert_eq!(name, "f");
+        assert!(params.is_empty());
+        assert!(body.is_empty());
+    } else {
+        panic!("expected a function declaration");
+    }
+}
+
+#[test]
+fn test_fun_with_params_and_body() {
+    let ast = parse("fun add(a, b) { print a; }").unwrap();
+    if let Ast::Declare(AstDeclaration::FunDeclare { name, params, body }) = ast {
+        assert_eq!(name, "add");
+        assert_eq!(params, vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(body.len(), 1);
+    } else {
+        panic!("expected a function declaration");
+    }
+}
+
+#[test]
+fn test_fun_missing_name_is_error() {
+    assert!(parse("fun () {}").is_none());
+}
+
+#[test]
+fn test_fun_too_many_params_is_error() {
+    let params = (0..256)
+        .map(|i| format!("p{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    assert!(parse(&format!("fun f({params}) {{}}")).is_none());
+
+    // Exactly 255 parameters is allowed.
+    let params = (0..255)
+        .map(|i| format!("p{i}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    assert!(parse(&format!("fun f({params}) {{}}")).is_some());
+}

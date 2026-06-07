@@ -33,7 +33,7 @@ use lox_parser::{
     Ast::Declare,
     AstAssignment::{Assign, LogicOr},
     AstComparison::{Greater, GreaterEqual, Less, LessEqual, Term},
-    AstDeclaration::{Statement, VarDeclare},
+    AstDeclaration::{FunDeclare, Statement, VarDeclare},
     AstEquality::{Comparison, Equal, NotEqual},
     AstExpression::Assignment,
     AstFactor::{Div, Mul, Unary},
@@ -95,14 +95,67 @@ impl PartialEq for NativeFn {
     }
 }
 
-/// Anything that can be invoked with `(...)` in Lox.
+/// A user-defined function: a `fun` declaration paired with the environment it
+/// was declared in (its closure).
 ///
-/// Currently only native functions; user-defined functions are added in a later
-/// chapter (see issue #16).
-#[derive(Debug, Clone, PartialEq)]
+/// Calls run the body in a child of `closure`, which is what gives Lox closures
+/// (and recursion, since a declaration binds its own name into that environment
+/// — see `eval_declaration`).
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#function-objects>
+pub struct LoxFunction {
+    /// The declared name, used **only** for display (`<fn name>`). It is purely
+    /// cosmetic: calls resolve a function by looking the binding up in the
+    /// environment (the key there, not this field), and function equality is
+    /// reference identity (`Rc::ptr_eq`, see `Callable`'s `PartialEq`) — neither
+    /// path reads `name`. Renaming or rebinding the value cannot change it.
+    name: String,
+    /// Parameter names, bound to argument values on each call. Its length is the
+    /// function's arity.
+    params: Vec<String>,
+    /// The body, shared from the parse tree via `Rc` so the value can outlive the
+    /// parse loop and be called repeatedly.
+    ///
+    /// TODO(#20): replace this shared ownership with a borrowed slice once the
+    /// EagerParser redesign lets a single owned AST outlive the interpreter; the
+    /// `Rc` here also forms a leak-prone cycle (env → function → closure env).
+    body: Rc<Vec<lox_parser::AstDeclaration>>,
+    /// The environment captured at declaration time (the function's closure).
+    closure: Rc<Environment>,
+}
+
+/// Debug only the identity (name and arity). We avoid printing `closure` and
+/// `body`: the closure can form a cycle (env → function → closure env), and the
+/// body is large, noisy AST.
+impl std::fmt::Debug for LoxFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoxFunction")
+            .field("name", &self.name)
+            .field("arity", &self.params.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Anything that can be invoked with `(...)` in Lox.
+#[derive(Debug, Clone)]
 pub enum Callable {
     /// A function implemented in Rust.
     Native(NativeFn),
+    /// A user-defined function.
+    Function(Rc<LoxFunction>),
+}
+
+/// Native functions compare by name (see [`NativeFn`]); user functions compare
+/// by reference identity (two bindings are equal only if they are the same
+/// function object), matching the book's treatment of function equality.
+impl PartialEq for Callable {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Callable::Native(a), Callable::Native(b)) => a == b,
+            (Callable::Function(a), Callable::Function(b)) => Rc::ptr_eq(a, b),
+            _ => false,
+        }
+    }
 }
 
 impl Callable {
@@ -110,15 +163,7 @@ impl Callable {
     fn arity(&self) -> usize {
         match self {
             Callable::Native(native) => native.arity,
-        }
-    }
-
-    /// Invoke the callable with already-evaluated arguments.
-    ///
-    /// Arity is checked by the caller (`eval_call`) before this runs.
-    fn call(&self, args: &[Value]) -> Result<Value, LoxError> {
-        match self {
-            Callable::Native(native) => (native.func)(args),
+            Callable::Function(function) => function.params.len(),
         }
     }
 }
@@ -127,6 +172,7 @@ impl std::fmt::Display for Callable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Callable::Native(native) => write!(f, "<native fn {}>", native.name),
+            Callable::Function(function) => write!(f, "<fn {}>", function.name),
         }
     }
 }
@@ -286,12 +332,47 @@ fn eval_call<W: std::io::Write>(
                             got: args.len(),
                         });
                     }
-                    callable.call(&args)
+                    match callable {
+                        // Native functions don't need interpreter context.
+                        Callable::Native(native) => (native.func)(&args),
+                        // User functions need the writer and AST evaluator, so
+                        // they are dispatched here where the interpreter is in
+                        // scope rather than on `Callable`.
+                        Callable::Function(function) => {
+                            call_function(interpreter, &function, &args)
+                        }
+                    }
                 }
                 other => Err(LoxError::NotCallable(other)),
             }
         }
     }
+}
+
+/// Invoke a user-defined function with already-evaluated, arity-checked arguments.
+///
+/// Runs the body in a fresh environment that is a child of the function's
+/// *closure* (not the call site), with the parameters bound to the arguments.
+/// Returns `Value::Nil` — explicit `return` is added in a later chapter (#17).
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#function-objects>
+fn call_function<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    function: &LoxFunction,
+    args: &[Value],
+) -> Result<Value, LoxError> {
+    let env = Environment::child_of(&function.closure);
+    for (param, arg) in function.params.iter().zip(args) {
+        env.declare(param, arg.clone());
+    }
+    let call_interpreter = Interpreter {
+        out: Rc::clone(&interpreter.out),
+        env,
+    };
+    for decl in function.body.iter() {
+        eval_declaration(&call_interpreter, decl)?;
+    }
+    Ok(Value::Nil)
 }
 
 fn eval_factor<W: std::io::Write>(
@@ -517,6 +598,21 @@ fn eval_declaration<W: std::io::Write>(
         VarDeclare(name, expr) => {
             let value = eval_expression(interpreter, expr)?;
             interpreter.env.declare(name, value);
+            Ok(Value::Nil)
+        }
+        FunDeclare { name, params, body } => {
+            let function = LoxFunction {
+                name: name.clone(),
+                params: params.clone(),
+                body: Rc::clone(body),
+                // Capture the defining environment as the closure. Declaring the
+                // name into this same environment (below) is what lets the body
+                // — which runs in a child of the closure — call itself.
+                closure: Rc::clone(&interpreter.env),
+            };
+            interpreter
+                .env
+                .declare(name, Value::Callable(Callable::Function(Rc::new(function))));
             Ok(Value::Nil)
         }
         Statement(stmt) => eval_statement(interpreter, stmt),
