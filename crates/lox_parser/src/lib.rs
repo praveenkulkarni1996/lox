@@ -138,6 +138,19 @@ pub fn parse(input: &str) -> Option<Ast> {
     parser.next()
 }
 
+/// Parse an entire source string into an owned list of top-level AST nodes.
+///
+/// Unlike [`parse`], this eagerly collects the whole program. Callers can then
+/// hold (or leak) the returned `Vec` so the AST outlives the interpreter — which
+/// is what lets runtime values borrow into it rather than owning copies.
+///
+/// Collection stops at the first `None` from the parser, so a parse error
+/// truncates the program silently for now (richer error reporting is tracked in
+/// issue #5).
+pub fn parse_program(input: &str) -> Vec<Ast> {
+    Parser::new(lox_lexer::Lexer::new(input.chars())).collect()
+}
+
 fn parse_id(head: lox_lexer::Token) -> Option<AstIdentifier> {
     match head {
         lox_lexer::Token::Identifier(var) => Some(var),

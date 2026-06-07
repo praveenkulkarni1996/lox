@@ -337,3 +337,16 @@ fn test_fun_too_many_params_is_error() {
         .join(", ");
     assert!(parse(&format!("fun f({params}) {{}}")).is_some());
 }
+
+// === Eager whole-program parsing ===
+
+#[test]
+fn test_parse_program_multiple_statements() {
+    let program = parse_program("print 1; print 2;");
+    assert_eq!(program.len(), 2);
+}
+
+#[test]
+fn test_parse_program_empty() {
+    assert!(parse_program("").is_empty());
+}
