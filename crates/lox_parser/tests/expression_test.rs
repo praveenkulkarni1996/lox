@@ -8,8 +8,8 @@ fn test_number_literal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::Number(n)
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Call(
+                AstCall::Primary(AstPrimary::Number(n))
             ))))
         ), None), None)))))) if n == 42.0
     ));
@@ -21,8 +21,8 @@ fn test_decimal_number() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::Number(n)
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Call(
+                AstCall::Primary(AstPrimary::Number(n))
             ))))
         ), None), None)))))) if (n - 1.25).abs() < f64::EPSILON
     ));
@@ -34,8 +34,8 @@ fn test_string_literal() {
     assert!(matches!(
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(
-            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Primary(
-                AstPrimary::Str(ref s)
+            AstComparison::Term(AstTerm::Factor(AstFactor::Unary(AstUnary::Call(
+                AstCall::Primary(AstPrimary::Str(ref s))
             ))))
         ), None), None)))))) if s == "hello"
     ));
@@ -50,7 +50,7 @@ fn test_true_literal() {
             AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
                 AstLogicAnd::And(
                     AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                        AstFactor::Unary(AstUnary::Primary(AstPrimary::True))
+                        AstFactor::Unary(AstUnary::Call(AstCall::Primary(AstPrimary::True)))
                     ))),
                     None
                 ),
@@ -69,7 +69,7 @@ fn test_false_literal() {
             AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
                 AstLogicAnd::And(
                     AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                        AstFactor::Unary(AstUnary::Primary(AstPrimary::False))
+                        AstFactor::Unary(AstUnary::Call(AstCall::Primary(AstPrimary::False)))
                     ))),
                     None
                 ),
@@ -88,7 +88,7 @@ fn test_nil_literal() {
             AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
                 AstLogicAnd::And(
                     AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Nil))
+                        AstFactor::Unary(AstUnary::Call(AstCall::Primary(AstPrimary::Nil)))
                     ))),
                     None
                 ),
@@ -105,7 +105,7 @@ fn test_identifier() {
         ast,
         Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
             AstAssignment::LogicOr(AstLogicOr::Or(AstLogicAnd::And(AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
-                AstUnary::Primary(AstPrimary::Id(ref name))
+                AstUnary::Call(AstCall::Primary(AstPrimary::Id(ref name)))
             )))), None), None))
         )))) if name == "foo"
     ));
@@ -188,7 +188,10 @@ fn test_not_false() {
         )),
     )))) = ast
     {
-        assert!(matches!(*inner, AstUnary::Primary(AstPrimary::False)));
+        assert!(matches!(
+            *inner,
+            AstUnary::Call(AstCall::Primary(AstPrimary::False))
+        ));
     } else {
         panic!("unexpected AST shape");
     }
@@ -420,7 +423,7 @@ fn test_grouped_expression() {
             AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
                 AstLogicAnd::And(
                     AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Group(_)))
+                        AstFactor::Unary(AstUnary::Call(AstCall::Primary(AstPrimary::Group(_))))
                     ))),
                     None
                 ),
@@ -438,7 +441,7 @@ fn test_grouped_addition() {
         AstAssignment::LogicOr(AstLogicOr::Or(
             AstLogicAnd::And(
                 AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
-                    AstUnary::Primary(AstPrimary::Group(expr)),
+                    AstUnary::Call(AstCall::Primary(AstPrimary::Group(expr))),
                 )))),
                 None,
             ),
@@ -639,6 +642,94 @@ fn test_assignment_with_or() {
     } else {
         panic!("expected Assign");
     }
+}
+
+// === Call Expressions ===
+
+#[test]
+fn test_call_no_args() {
+    // clock() → Call(Primary(Id("clock")), [])
+    let ast = parse("clock();").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Call(AstCall::Call(callee, args)),
+                )))),
+                None,
+            ),
+            None,
+        )),
+    )))) = ast
+    {
+        assert!(matches!(*callee, AstCall::Primary(AstPrimary::Id(ref n)) if n == "clock"));
+        assert!(args.is_empty());
+    } else {
+        panic!("expected a call expression");
+    }
+}
+
+#[test]
+fn test_call_with_args() {
+    // f(1, 2) → two arguments
+    let ast = parse("f(1, 2);").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Call(AstCall::Call(_, args)),
+                )))),
+                None,
+            ),
+            None,
+        )),
+    )))) = ast
+    {
+        assert_eq!(args.len(), 2);
+    } else {
+        panic!("expected a call expression");
+    }
+}
+
+#[test]
+fn test_chained_call() {
+    // f(1)(2) → Call(Call(Primary(f), [1]), [2])
+    let ast = parse("f(1)(2);").unwrap();
+    if let Ast::Declare(AstDeclaration::Statement(AstStatement::Expr(AstExpression::Assignment(
+        AstAssignment::LogicOr(AstLogicOr::Or(
+            AstLogicAnd::And(
+                AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
+                    AstUnary::Call(AstCall::Call(callee, _)),
+                )))),
+                None,
+            ),
+            None,
+        )),
+    )))) = ast
+    {
+        assert!(matches!(*callee, AstCall::Call(_, _)));
+    } else {
+        panic!("expected a chained call expression");
+    }
+}
+
+#[test]
+fn test_too_many_arguments() {
+    // More than 255 arguments is a parse error.
+    let args = (0..256)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("f({args});");
+    assert!(parse(&source).is_none());
+
+    // Exactly 255 arguments is allowed.
+    let args = (0..255)
+        .map(|i| i.to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let source = format!("f({args});");
+    assert!(parse(&source).is_some());
 }
 
 // === Malformed Expressions ===
