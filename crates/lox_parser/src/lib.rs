@@ -14,8 +14,16 @@ pub enum AstPrimary {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum AstUnary {
+pub enum AstCall {
     Primary(AstPrimary),
+    /// A call expression: `callee(arguments)`. Calls chain left-associatively,
+    /// so `f()()` nests as `Call(Call(Primary(f), []), [])`.
+    Call(Box<AstCall>, Vec<AstExpression>),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum AstUnary {
+    Call(AstCall),
     Not(Box<AstUnary>),
     Negative(Box<AstUnary>),
 }
@@ -166,10 +174,60 @@ where
             Some(AstUnary::Negative(Box::new(unary)))
         }
         _ => {
-            let primary = parse_primary(head, p)?;
-            Some(AstUnary::Primary(primary))
+            let call = parse_call(head, p)?;
+            Some(AstUnary::Call(call))
         }
     }
+}
+
+/// Maximum number of arguments allowed in a single call, matching the book.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#maximum-argument-counts>
+const MAX_ARGUMENTS: usize = 255;
+
+/// Parse a `call` expression: a primary followed by zero or more argument lists.
+///
+/// Grammar: `call → primary ( "(" arguments? ")" )*`. Calls are left-associative,
+/// so `f()()` parses as `Call(Call(Primary(f), []), [])`.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#function-calls>
+fn parse_call<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstCall>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let mut expr = AstCall::Primary(parse_primary(head, p)?);
+    while p.tokens.next_if_eq(&lox_lexer::Token::LParens).is_some() {
+        let args = parse_arguments(p)?;
+        if args.len() > MAX_ARGUMENTS {
+            return None;
+        }
+        expr = AstCall::Call(Box::new(expr), args);
+    }
+    Some(expr)
+}
+
+/// Parse a comma-separated argument list, assuming the opening `(` is consumed.
+///
+/// Consumes through the closing `)`. The [`MAX_ARGUMENTS`] limit is enforced by
+/// the caller ([`parse_call`]); this function only parses.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#function-calls>
+fn parse_arguments<I>(p: &mut Parser<I>) -> Option<Vec<AstExpression>>
+where
+    I: Iterator<Item = lox_lexer::Token>,
+{
+    let mut args = Vec::new();
+    if p.tokens.next_if_eq(&lox_lexer::Token::RParens).is_some() {
+        return Some(args);
+    }
+    loop {
+        args.push(parse_expr(p.tokens.next()?, p)?);
+        if p.tokens.next_if_eq(&lox_lexer::Token::Comma).is_none() {
+            break;
+        }
+    }
+    p.tokens.next_if_eq(&lox_lexer::Token::RParens)?;
+    Some(args)
 }
 
 fn parse_factor<I>(head: lox_lexer::Token, p: &mut Parser<I>) -> Option<AstFactor>
@@ -315,7 +373,9 @@ where
             Some(AstLogicOr::Or(
                 AstLogicAnd::And(
                     AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(
-                        AstFactor::Unary(AstUnary::Primary(AstPrimary::Id(identifier))),
+                        AstFactor::Unary(AstUnary::Call(AstCall::Primary(AstPrimary::Id(
+                            identifier,
+                        )))),
                     ))),
                     None,
                 ),
@@ -440,7 +500,7 @@ fn make_true_expr() -> AstExpression {
     AstExpression::Assignment(AstAssignment::LogicOr(AstLogicOr::Or(
         AstLogicAnd::And(
             AstEquality::Comparison(AstComparison::Term(AstTerm::Factor(AstFactor::Unary(
-                AstUnary::Primary(AstPrimary::True),
+                AstUnary::Call(AstCall::Primary(AstPrimary::True)),
             )))),
             None,
         ),

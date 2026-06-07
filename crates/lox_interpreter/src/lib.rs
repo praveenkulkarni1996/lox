@@ -18,6 +18,12 @@ pub enum LoxError {
     #[error("Could not find variable {0}.")]
     VariableNotFound(String),
 
+    #[error("Can only call functions and classes; '{0}' is not callable.")]
+    NotCallable(Value),
+
+    #[error("Expected {expected} arguments but got {got}.")]
+    ArityMismatch { expected: usize, got: usize },
+
     #[error("I/O error while writing output: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -36,7 +42,7 @@ use lox_parser::{
     AstPrimary::{False, Group, Id, Nil, Number, Str, True},
     AstStatement::{Block, Expr, If, Print, While},
     AstTerm::{Add, Factor, Sub},
-    AstUnary::{Negative, Not, Primary},
+    AstUnary::{Negative, Not},
 };
 
 use lox_lexer::Lexer;
@@ -53,6 +59,87 @@ pub enum Value {
     Boolean(bool),
     /// The nil value, representing the absence of a value.
     Nil,
+    /// A callable value, such as a native function.
+    Callable(Callable),
+}
+
+/// A built-in function implemented in Rust.
+///
+/// The `name` is the function's identity: it is unique across all natives, so it
+/// is what we use for both [`Display`](std::fmt::Display) (how the value prints
+/// and appears in error messages) and equality. It is independent of whatever
+/// variable currently binds the function.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#native-functions>
+#[derive(Debug, Clone)]
+pub struct NativeFn {
+    /// Display name and identity, e.g. `clock`.
+    name: &'static str,
+    /// Number of arguments the function expects.
+    arity: usize,
+    /// The implementation.
+    func: fn(&[Value]) -> Result<Value, LoxError>,
+}
+
+/// Native functions are compared by `name`, which uniquely identifies each
+/// built-in.
+///
+/// We deliberately do not compare the `func` pointers. Rust does not give
+/// function pointers meaningful equality: the `unpredictable_function_pointer_comparisons`
+/// lint warns that the compiler may emit one function at several addresses
+/// (across codegen units) or fold distinct functions with identical bodies to a
+/// single address, so `==` on `fn` pointers is unreliable in both directions.
+impl PartialEq for NativeFn {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+/// Anything that can be invoked with `(...)` in Lox.
+///
+/// Currently only native functions; user-defined functions are added in a later
+/// chapter (see issue #16).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Callable {
+    /// A function implemented in Rust.
+    Native(NativeFn),
+}
+
+impl Callable {
+    /// The number of arguments this callable expects.
+    fn arity(&self) -> usize {
+        match self {
+            Callable::Native(native) => native.arity,
+        }
+    }
+
+    /// Invoke the callable with already-evaluated arguments.
+    ///
+    /// Arity is checked by the caller (`eval_call`) before this runs.
+    fn call(&self, args: &[Value]) -> Result<Value, LoxError> {
+        match self {
+            Callable::Native(native) => (native.func)(args),
+        }
+    }
+}
+
+impl std::fmt::Display for Callable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Callable::Native(native) => write!(f, "<native fn {}>", native.name),
+        }
+    }
+}
+
+/// The `clock()` native: seconds elapsed since the Unix epoch as a number.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#telling-time>
+fn clock(_args: &[Value]) -> Result<Value, LoxError> {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    Ok(Value::Number(secs))
 }
 
 impl From<Value> for bool {
@@ -82,6 +169,7 @@ impl std::fmt::Display for Value {
             Value::Number(num) => write!(f, "{}", num),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Str(s) => write!(f, "{}", s),
+            Value::Callable(c) => write!(f, "{}", c),
         }
     }
 }
@@ -99,6 +187,7 @@ impl TryFrom<Value> for f64 {
             Value::Nil => Err(LoxError::NumberConversionError(v)),
             Value::Str(_) => Err(LoxError::NumberConversionError(v)),
             Value::Boolean(_) => Err(LoxError::NumberConversionError(v)),
+            Value::Callable(_) => Err(LoxError::NumberConversionError(v)),
         }
     }
 }
@@ -116,9 +205,18 @@ where
 
 impl<W: std::io::Write> Interpreter<W> {
     pub fn new(out: W) -> Self {
+        let env = Environment::new();
+        env.declare(
+            "clock",
+            Value::Callable(Callable::Native(NativeFn {
+                name: "clock",
+                arity: 0,
+                func: clock,
+            })),
+        );
         Interpreter {
             out: Rc::new(RefCell::new(out)),
-            env: Environment::new(),
+            env,
         }
     }
 
@@ -150,11 +248,49 @@ fn eval_unary<W: std::io::Write>(
     ast: &lox_parser::AstUnary,
 ) -> Result<Value, LoxError> {
     match ast {
-        Primary(primary) => eval_primary(interpreter, primary),
+        lox_parser::AstUnary::Call(call) => eval_call(interpreter, call),
         Not(unary) => Ok(Value::Boolean(!bool::from(eval_unary(interpreter, unary)?))),
         Negative(unary) => Ok(Value::Number(
             -(f64::try_from(eval_unary(interpreter, unary)?)?),
         )),
+    }
+}
+
+/// Evaluate a `call` expression.
+///
+/// A bare primary evaluates directly. For an actual call, the callee and each
+/// argument are evaluated left-to-right, then the callee must be a
+/// [`Value::Callable`] of matching arity; otherwise a [`LoxError`] is returned.
+///
+/// Dispatch lives here (rather than on [`Value`]) so that the interpreter's
+/// writer generic never leaks into the value type.
+///
+/// Reference: <https://craftinginterpreters.com/functions.html#function-calls>
+fn eval_call<W: std::io::Write>(
+    interpreter: &Interpreter<W>,
+    ast: &lox_parser::AstCall,
+) -> Result<Value, LoxError> {
+    match ast {
+        lox_parser::AstCall::Primary(primary) => eval_primary(interpreter, primary),
+        lox_parser::AstCall::Call(callee, args) => {
+            let callee = eval_call(interpreter, callee)?;
+            let args = args
+                .iter()
+                .map(|arg| eval_expression(interpreter, arg))
+                .collect::<Result<Vec<_>, _>>()?;
+            match callee {
+                Value::Callable(callable) => {
+                    if callable.arity() != args.len() {
+                        return Err(LoxError::ArityMismatch {
+                            expected: callable.arity(),
+                            got: args.len(),
+                        });
+                    }
+                    callable.call(&args)
+                }
+                other => Err(LoxError::NotCallable(other)),
+            }
+        }
     }
 }
 

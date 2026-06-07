@@ -759,3 +759,42 @@ fn test_for_fibonacci() {
         "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n6765\n"
     );
 }
+
+// === Function Calls (native functions) ===
+
+#[test]
+fn test_clock_returns_number() {
+    let result = interpret("clock();").unwrap();
+    assert!(matches!(result, Value::Number(_)));
+}
+
+#[test]
+fn test_clock_value_displays_as_native_fn() {
+    let (result, output) = interpret_capturing("print clock;");
+    assert!(result.is_ok());
+    assert_eq!(output, "<native fn clock>\n");
+}
+
+#[test]
+fn test_call_arity_mismatch() {
+    let err = interpret("clock(1);").unwrap_err();
+    assert!(matches!(
+        err,
+        LoxError::ArityMismatch {
+            expected: 0,
+            got: 1
+        }
+    ));
+}
+
+#[test]
+fn test_call_non_callable_literal() {
+    let err = interpret("42();").unwrap_err();
+    assert!(matches!(err, LoxError::NotCallable(_)));
+}
+
+#[test]
+fn test_call_non_callable_variable() {
+    let err = interpret("var x = 1; x();").unwrap_err();
+    assert!(matches!(err, LoxError::NotCallable(_)));
+}
